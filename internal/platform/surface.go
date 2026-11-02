@@ -163,6 +163,9 @@ type TouchSurface interface {
 	// DIPs, as a finger drags a text handle, until HideMagnifier.
 	ShowMagnifier(x, y float64)
 	HideMagnifier()
+	// SetBackAvailable tells whether the content takes the system's back:
+	// without, it leaves the app, as the system's predictive back shows.
+	SetBackAvailable(on bool)
 }
 
 // PluginViewSurface is a Surface that holds native views of plugins' native
@@ -378,6 +381,14 @@ const (
 	// SurfaceLowMemory reports that the system is short of memory: the
 	// content lets go of what it can make again.
 	SurfaceLowMemory
+	// SurfaceBackGesture reports the system's gesture of going back as it
+	// goes, Android's predictive back: Text is "started", "progress" with
+	// how far in Scale, from 0 to 1, or "cancelled"; going back comes as the
+	// back key.
+	SurfaceBackGesture
+	// SurfaceScrollToTop reports a tap on iOS's status bar, which sends what
+	// scrolls under it back to its top.
+	SurfaceScrollToTop
 )
 
 // EditCommands are the menu roles of edit commands, which native UI takes as
@@ -401,8 +412,9 @@ type SurfaceEvent struct {
 	DX, DY   float64
 	Precise  bool
 	Momentum bool
-	// Scale is PointerZoom's.
-	Scale float64
+	// Scale is PointerZoom's, and Rotation the radians clockwise two fingers
+	// turned since the last, on touch screens.
+	Scale, Rotation float64
 	Key   Key
 	// PhysicalKey is the key by its position on an ANSI US keyboard,
 	// whatever the active layout types; KeyUnknown where the backend does

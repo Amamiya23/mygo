@@ -475,6 +475,12 @@ type engine struct {
 	// the keyboard's inset as the last frame laid out.
 	touchText   touchText
 	keyboardWas float64
+	// edgeBack is the Router a gesture takes back, as the frame built it,
+	// and backSent what the surface was last told of taking back.
+	edgeBack *Router
+	backSent bool
+	// swipeRouter is the Router a gesture is taking back, or giving up on.
+	swipeRouter *Router
 	flinging fling
 	// wheeling are the elements of the scroll containers that the notches
 	// of a mouse wheel scroll smoothly (glideWheels).

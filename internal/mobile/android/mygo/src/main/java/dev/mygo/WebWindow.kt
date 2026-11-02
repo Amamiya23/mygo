@@ -147,6 +147,7 @@ class WebWindow(context: Context, c: CreateWindowCall) : HostWindow(context, c.i
 
     private fun reportState() {
         Go.send(Event.pageState(id, web.url ?: "", web.title ?: "", web.progress < 100, web.canGoBack(), web.canGoForward()))
+        HostImpl.updateBack()
     }
 
     /** Whether url is one of the app's schemes, served at https://<scheme>.localhost. */

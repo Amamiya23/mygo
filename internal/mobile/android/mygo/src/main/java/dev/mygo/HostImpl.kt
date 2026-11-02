@@ -141,6 +141,15 @@ object HostImpl : HostCalls {
         depth
     }
 
+    /** Hears the system's back, while something in the app takes it. */
+    var backCallback: androidx.activity.OnBackPressedCallback? = null
+
+    /** The system's back goes to the app, or leaves it, as predictive back shows beforehand. */
+    fun updateBack() {
+        val f = front()
+        backCallback?.isEnabled = Navigation.canPop() || (f as? SurfaceWindow)?.backAvailable == true || (f as? WebWindow)?.web?.canGoBack() == true
+    }
+
     /** Android's back: the window in front's page goes back, or the app takes it. */
     fun back(): Boolean {
         if (Navigation.back()) return true
@@ -241,11 +250,13 @@ object HostImpl : HostCalls {
         val w = windows[c.id] ?: return
         Navigation.show(w)
         w.insetsChanged()
+        updateBack()
     }
 
     override fun hideWindow(c: HideWindowCall) {
         val w = windows[c.id] ?: return
         Navigation.hide(w)
+        updateBack()
     }
 
     override fun closeWindow(c: CloseWindowCall) {
@@ -272,8 +283,12 @@ object HostImpl : HostCalls {
         val p = windows[c.parent] ?: return
         val w = windows[c.child] ?: return
         Navigation.push(w, p, c.title, c.animated)
+        updateBack()
     }
-    override fun popWindow(c: PopWindowCall) { windows[c.id]?.let { Navigation.pop(it, c.animated) } }
+    override fun popWindow(c: PopWindowCall) {
+        windows[c.id]?.let { Navigation.pop(it, c.animated) }
+        updateBack()
+    }
 
     override fun setBackground(c: SetBackgroundCall) {
         val w = windows[c.id] ?: return
@@ -787,6 +802,10 @@ object HostImpl : HostCalls {
     override fun accessibilityChanged(c: AccessibilityChangedCall) { surface(c.id)?.accessibilityChanged(c.focus) }
     override fun announce(c: AnnounceCall) { (front()?.view ?: root).announceForAccessibility(c.text) }
     override fun showMenu(c: ShowMenuCall) { surface(c.id)?.showMenu(c) }
+    override fun setBackAvailable(c: SetBackAvailableCall) {
+        surface(c.id)?.backAvailable = c.on
+        updateBack()
+    }
     override fun showMagnifier(c: ShowMagnifierCall) { surface(c.id)?.showMagnifier(c) }
     override fun hideMagnifier(c: HideMagnifierCall) { surface(c.id)?.hideMagnifier() }
     override fun textMetrics(c: TextMetricsCall): TextMetricsReply = Text.metrics(c)

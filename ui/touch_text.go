@@ -202,6 +202,14 @@ func (rt *engine) touchSurface(fn func(platform.TouchSurface)) {
 	}
 }
 
+// touchSurfaceOf returns the window's touch surface, nil without one.
+func (rt *engine) touchSurfaceOf() platform.TouchSurface {
+	if h, ok := rt.host.(interface{ touchSurface() platform.TouchSurface }); ok {
+		return h.touchSurface()
+	}
+	return nil
+}
+
 // showEditMenu shows the system's menu of editing commands over the
 // selection of the input with the focus.
 func (rt *engine) showEditMenu(s *state) {

@@ -53,6 +53,8 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
     private val editing get() = input.active
 
     private var nodes: List<Node>? = null
+    /** Whether the content takes the system's back. */
+    var backAvailable = false
 
     // A SurfaceView's background would draw over its surface, hiding the
     // frames: the page around it takes the color.

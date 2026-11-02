@@ -81,6 +81,16 @@ type Router struct {
 	// view is the state of View; the views of Route.View keep theirs in
 	// their elements.
 	view routeView
+	// swipe is how far, from 0 to 1, a gesture has taken the page shown back
+	// over the one before it (touch_back.go), while swiping; settle takes it
+	// back to 0 as the gesture is given up.
+	swipe    float32
+	swiping  bool
+	settle   channel
+	settling bool
+	// resume is where the slide of the next page starts, a gesture having
+	// gone that far of it.
+	resume float32
 }
 
 // routeEntry is an entry of the history: a location of a page.
@@ -518,6 +528,9 @@ func (r *Router) coreView(c *context, fn func(r *Route)) *node {
 	box.widget = "Router"
 	wrapElement(box).Bind(&r.Handle)
 	r.keys(c, box)
+	if touchFrame != nil && c.routers == 1 {
+		r.noteBack(c)
+	}
 	r.build(c, box, &r.view, nil, fn)
 	return box
 }
@@ -552,6 +565,17 @@ func (r *Router) build(c *context, box *node, v *routeView, parent *Route, fn fu
 	box.Children(func() {
 		var page *node
 		switch {
+		case v.leaving == nil && parent == nil && r.peeking(c) && r.at > 0:
+			// A gesture takes the page back: the one before shows under it.
+			box.Clip()
+			bg := backdrop(box)
+			at := r.swipe
+			lower := r.page(c, parent, r.entries[r.at-1], fn, true)
+			page = r.page(c, parent, cur, fn, false)
+			page.Absolute().Top(0).Fill().Background(bg).StartPercent(100*at).Shadow(0, 0, 16, 0, RGBA(0, 0, 0, 0.15))
+			lower.StartPercent(-30 * (1 - at)).Background(bg).DrawOver(func(p *Painter, rc Rect) {
+				p.Fill(rc, RGBA(0, 0, 0, 0.06*(1-at)), 0)
+			})
 		case v.leaving == nil:
 			page = r.page(c, parent, cur, fn, false)
 		case r.Transition == TransitionMatch:
@@ -659,7 +683,8 @@ func (r *Router) show(c *context, box *node, v *routeView, parent *Route, cur *r
 	}
 	v.leaving = old
 	defer func() {
-		v.progress = channel{at: c.now}
+		v.progress = channel{value: float64(r.resume), at: c.now}
+		r.resume = 0
 		headFor(&v.progress, 1, r.animation(v.dir), c.now)
 	}()
 	if r.Transition == TransitionAuto && !rt.preferences().ReduceMotion {

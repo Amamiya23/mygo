@@ -550,6 +550,8 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
     func accessibilityChanged(_ c: AccessibilityChangedCall) { surface(c.id)?.accessibilityChanged(focus: c.focus) }
     func announce(_ c: AnnounceCall) { UIAccessibility.post(notification: .announcement, argument: c.text) }
     func showMenu(_ c: ShowMenuCall) { surface(c.id)?.showMenu(c) }
+    // iOS's back is the swipe from the edge the content handles itself.
+    func setBackAvailable(_ c: SetBackAvailableCall) {}
     func showMagnifier(_ c: ShowMagnifierCall) { surface(c.id)?.showMagnifier(c) }
     func hideMagnifier(_ c: HideMagnifierCall) { surface(c.id)?.hideMagnifier() }
     // Go lays out and draws text with Core Text on iOS.

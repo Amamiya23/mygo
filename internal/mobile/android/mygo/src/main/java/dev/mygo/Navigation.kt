@@ -188,6 +188,20 @@ object Navigation {
             }
             Go.send(Event.popped(p.window.id))
         }
+        HostImpl.updateBack()
+    }
+
+    /** Whether the window in front can go off its stack. */
+    fun canPop(): Boolean {
+        for (k in root.childCount - 1 downTo 0) {
+            val s = when (val v = root.getChildAt(k)) {
+                is Tabs -> v.stacks.getOrNull(v.selected)
+                is Stack -> v
+                else -> null
+            } ?: continue
+            return s.pages.size > 1
+        }
+        return false
     }
 
     /** back pops the window in front off its stack, and reports whether there was one to pop. */

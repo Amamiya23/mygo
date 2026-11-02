@@ -5,8 +5,9 @@ import "github.com/egoist/mygo/ui"
 // ZoomState is how a Zoomable shows its content, kept in the app's state.
 type ZoomState struct {
 	// Scale is how large, 1 by default; X and Y how far the content moved, in
-	// DIPs from its place.
-	Scale, X, Y float32
+	// DIPs from its place; Rotation how far it turned, in radians, if
+	// ZoomOptions.Rotate.
+	Scale, X, Y, Rotation float32
 }
 
 // Reset shows the content as it was.
@@ -19,6 +20,8 @@ type ZoomOptions struct {
 	// DoubleTap is the scale a double tap zooms to from the smallest, and
 	// back; 2 by default.
 	DoubleTap float32
+	// Rotate lets two fingers turn the content too.
+	Rotate bool
 }
 
 // Zoomable shows content that two fingers pinch to zoom and one drags, and a
@@ -56,6 +59,9 @@ func Zoomable(c *ui.Context, z *ZoomState, o ZoomOptions, content func()) ui.Ele
 			z.X = cx - (cx-z.X)*k
 			z.Y = cy - (cy-z.Y)*k
 			z.Scale *= k
+			if o.Rotate {
+				z.Rotation += ev.Rotation
+			}
 			clamp()
 			return true
 		case ui.InputScroll:
@@ -84,7 +90,7 @@ func Zoomable(c *ui.Context, z *ZoomState, o ZoomOptions, content func()) ui.Ele
 	x := box.AnimateTo("x", z.X, ui.Snappy)
 	y := box.AnimateTo("y", z.Y, ui.Snappy)
 	box.Children(func() {
-		ui.Box(c).Fill().Translate(x, y).Scale(scale, scale).Children(content)
+		ui.Box(c).Fill().Translate(x, y).Scale(scale, scale).Rotate(z.Rotation).Children(content)
 	})
 	return box
 }

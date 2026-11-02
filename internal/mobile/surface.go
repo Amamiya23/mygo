@@ -32,6 +32,9 @@ type surface struct {
 	touching  bool
 	fingers   map[int][2]float64
 	pinchDist float64
+	// pinchAngle is the line between two fingers, once pinchTurning.
+	pinchAngle   float64
+	pinchTurning bool
 	// lastTap is where and when the last tap ended, for double taps.
 	lastTapX, lastTapY, lastTapTime float64
 	taps                            int
@@ -189,6 +192,10 @@ func (s *surface) ShowEditMenu(x, y float64, actions []string) {
 	s.w.b.call(&wire.ShowMenu{ID: s.w.id, X: x, Y: y, Actions: actions}, nil)
 }
 
+func (s *surface) SetBackAvailable(on bool) {
+	s.w.b.call(&wire.SetBackAvailable{ID: s.w.id, On: on}, nil)
+}
+
 func (s *surface) ShowMagnifier(x, y float64) {
 	s.w.b.call(&wire.ShowMagnifier{ID: s.w.id, X: x, Y: y}, nil)
 }
@@ -316,15 +323,53 @@ func (s *surface) cancel() {
 	s.taps = 0
 }
 
+// spread is how far apart two fingers are. Map order would swap them, so
+// they go by their numbers.
 func (s *surface) spread() float64 {
-	var p [][2]float64
-	for _, f := range s.fingers {
-		p = append(p, f)
-	}
-	if len(p) < 2 {
+	a, b, ok := s.twoFingers()
+	if !ok {
 		return 0
 	}
-	return math.Hypot(p[0][0]-p[1][0], p[0][1]-p[1][1])
+	return math.Hypot(a[0]-b[0], a[1]-b[1])
+}
+
+func (s *surface) twoFingers() (a, b [2]float64, ok bool) {
+	lo, hi := -1, -1
+	for id := range s.fingers {
+		switch {
+		case lo < 0 || id < lo:
+			lo, hi = id, lo
+		case hi < 0 || id < hi:
+			hi = id
+		}
+	}
+	if lo < 0 || hi < 0 {
+		return a, b, false
+	}
+	return s.fingers[lo], s.fingers[hi], true
+}
+
+// turned is how far two fingers turned since it was last asked, in radians
+// clockwise, the way the shorter way round.
+func (s *surface) turned() float64 {
+	a, b, ok := s.twoFingers()
+	if !ok {
+		return 0
+	}
+	angle := math.Atan2(b[1]-a[1], b[0]-a[0])
+	d := angle - s.pinchAngle
+	first := !s.pinchTurning
+	s.pinchAngle, s.pinchTurning = angle, true
+	if first {
+		return 0
+	}
+	for d > math.Pi {
+		d -= 2 * math.Pi
+	}
+	for d < -math.Pi {
+		d += 2 * math.Pi
+	}
+	return d
 }
 
 func (s *surface) center() (float64, float64) {
@@ -500,6 +545,16 @@ func (b *Backend) handleSurface(op uint64, r *wire.Reader, w *wire.Writer) bool 
 			reply.Handled = s.send(platform.SurfaceEvent{Kind: kind, Key: k, PhysicalKey: k, Mods: platform.Modifiers(e.Mods), Repeat: e.Repeated})
 		}
 		reply.Encode(w)
+	case wire.EventBackGesture:
+		var e wire.BackGestureEvent
+		e.Decode(r)
+		if s := sf(e.ID); s != nil {
+			s.send(platform.SurfaceEvent{Kind: platform.SurfaceBackGesture, Text: e.Phase, Scale: e.Progress})
+		}
+	case wire.EventStatusBarTapped:
+		if w := b.front(); w != nil && w.s != nil {
+			w.s.send(platform.SurfaceEvent{Kind: platform.SurfaceScrollToTop})
+		}
 	case wire.EventViewPressed:
 		var e wire.ViewPressedEvent
 		e.Decode(r)

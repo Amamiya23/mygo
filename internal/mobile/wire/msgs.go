@@ -74,13 +74,14 @@ const (
 	CallAccessibilityChanged   = 68
 	CallAnnounce               = 69
 	CallShowMenu               = 70
-	CallShowMagnifier          = 71
-	CallHideMagnifier          = 72
-	CallTextMetrics            = 73
-	CallMeasureText            = 74
-	CallTextAdvances           = 75
-	CallDrawText               = 76
-	CallRegisterFont           = 77
+	CallSetBackAvailable       = 71
+	CallShowMagnifier          = 72
+	CallHideMagnifier          = 73
+	CallTextMetrics            = 74
+	CallMeasureText            = 75
+	CallTextAdvances           = 76
+	CallDrawText               = 77
+	CallRegisterFont           = 78
 )
 
 // Numbers of events.
@@ -94,54 +95,56 @@ const (
 	EventMemoryWarning       = 7
 	EventTerminating         = 8
 	EventResized             = 9
-	EventViewPressed         = 10
-	EventPluginResult        = 11
-	EventPluginEvent         = 12
-	EventNetworkChanged      = 13
-	EventShareResult         = 14
-	EventMenuPicked          = 15
-	EventBarItemClicked      = 16
-	EventTabSelected         = 17
-	EventPopped              = 18
-	EventBackPressed         = 19
-	EventMessage             = 20
-	EventWillNavigate        = 21
-	EventNewWindow           = 22
-	EventPageState           = 23
-	EventNavigationStarted   = 24
-	EventNavigationCommitted = 25
-	EventLoadFinished        = 26
-	EventLoadFailed          = 27
-	EventClosedByPage        = 28
-	EventProcessGone         = 29
-	EventPermissionRequested = 30
-	EventSchemeRequest       = 31
-	EventSchemeCancel        = 32
-	EventAsyncResult         = 33
-	EventCaptured            = 34
-	EventMessageBoxResult    = 35
-	EventFilesResult         = 36
-	EventNotifyDone          = 37
-	EventNotificationClicked = 38
-	EventFrame               = 39
-	EventSurfaceChanged      = 40
-	EventSurfaceDestroyed    = 41
-	EventTouch               = 42
-	EventScroll              = 43
-	EventKey                 = 44
-	EventTextReplace         = 45
-	EventTextMark            = 46
-	EventTextUnmark          = 47
-	EventTextDelete          = 48
-	EventTextSelect          = 49
-	EventTextCommand         = 50
-	EventTextState           = 51
-	EventTextRange           = 52
-	EventTextBounds          = 53
-	EventTextIndexAt         = 54
-	EventTextInputEnded      = 55
-	EventAccessibilityTree   = 56
-	EventAccessibilityAction = 57
+	EventBackGesture         = 10
+	EventStatusBarTapped     = 11
+	EventViewPressed         = 12
+	EventPluginResult        = 13
+	EventPluginEvent         = 14
+	EventNetworkChanged      = 15
+	EventShareResult         = 16
+	EventMenuPicked          = 17
+	EventBarItemClicked      = 18
+	EventTabSelected         = 19
+	EventPopped              = 20
+	EventBackPressed         = 21
+	EventMessage             = 22
+	EventWillNavigate        = 23
+	EventNewWindow           = 24
+	EventPageState           = 25
+	EventNavigationStarted   = 26
+	EventNavigationCommitted = 27
+	EventLoadFinished        = 28
+	EventLoadFailed          = 29
+	EventClosedByPage        = 30
+	EventProcessGone         = 31
+	EventPermissionRequested = 32
+	EventSchemeRequest       = 33
+	EventSchemeCancel        = 34
+	EventAsyncResult         = 35
+	EventCaptured            = 36
+	EventMessageBoxResult    = 37
+	EventFilesResult         = 38
+	EventNotifyDone          = 39
+	EventNotificationClicked = 40
+	EventFrame               = 41
+	EventSurfaceChanged      = 42
+	EventSurfaceDestroyed    = 43
+	EventTouch               = 44
+	EventScroll              = 45
+	EventKey                 = 46
+	EventTextReplace         = 47
+	EventTextMark            = 48
+	EventTextUnmark          = 49
+	EventTextDelete          = 50
+	EventTextSelect          = 51
+	EventTextCommand         = 52
+	EventTextState           = 53
+	EventTextRange           = 54
+	EventTextBounds          = 55
+	EventTextIndexAt         = 56
+	EventTextInputEnded      = 57
+	EventAccessibilityTree   = 58
+	EventAccessibilityAction = 59
 )
 
 // AppInfo is the app's bundle and the system's settings, asked once at start.
@@ -1379,6 +1382,21 @@ func (m *ShowMenu) Encode(w *Writer) {
 // Wait reports whether the caller waits for the host to run it.
 func (*ShowMenu) Wait() bool { return false }
 
+// SetBackAvailable is whether the content takes the system's back.
+type SetBackAvailable struct {
+	ID int
+	On bool
+}
+
+func (m *SetBackAvailable) Encode(w *Writer) {
+	w.Uvarint(CallSetBackAvailable)
+	w.Int(m.ID)
+	w.Bool(m.On)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*SetBackAvailable) Wait() bool { return false }
+
 // ShowMagnifier is the system's magnifier of what is at a point.
 type ShowMagnifier struct {
 	ID int
@@ -1663,6 +1681,26 @@ func (m *ResizedEvent) Decode(r *Reader) {
 	m.SafeBottom = r.Float()
 	m.SafeRight = r.Float()
 	m.Keyboard = r.Float()
+}
+
+// BackGestureEvent is the system's gesture of going back, as it goes: Phase is "started", "progress" or "cancelled".
+type BackGestureEvent struct {
+	ID       int
+	Phase    string
+	Progress float64
+}
+
+func (m *BackGestureEvent) Decode(r *Reader) {
+	m.ID = r.Int()
+	m.Phase = r.String()
+	m.Progress = r.Float()
+}
+
+// StatusBarTappedEvent is a tap on iOS's status bar.
+type StatusBarTappedEvent struct {
+}
+
+func (m *StatusBarTappedEvent) Decode(r *Reader) {
 }
 
 // ViewPressedEvent is a finger went down on a view a surface holds, which takes it.

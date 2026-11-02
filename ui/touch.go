@@ -35,7 +35,7 @@ var (
 func enableTouch() {
 	touchInput = (*engine).touchEvent
 	touchFrame = (*engine).touchStep
-	touchPaint = (*engine).paintHandles
+	touchPaint = (*engine).touchOver
 	insetRoot = (*engine).padInsets
 	extendScrolls = (*engine).extendUnderBottom
 }
@@ -126,6 +126,8 @@ type touchPan struct {
 	// press gave the finger to the mouse's handling, to drag what it holds.
 	holds    uint64
 	dragging bool
+	// edge says it swipes back from the screen's edge.
+	edge bool
 	// textBefore is the input with the focus as it went down, and selBefore
 	// its selection then.
 	textBefore uint64
@@ -194,6 +196,11 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		if t.dragging {
 			return false
 		}
+		if t.edge {
+			rt.moveEdgeSwipe(t, x)
+			t.sample(rt.now(), x, y)
+			return true
+		}
 		if !t.panning {
 			dx, dy := x-t.x0, y-t.y0
 			if math.Hypot(float64(dx), float64(dy)) < touchSlop {
@@ -203,6 +210,9 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 			axis := Vertical
 			if abs32(dx) > abs32(dy) {
 				axis = Horizontal
+			}
+			if axis == Horizontal && dx > 0 && rt.startEdgeSwipe(t) {
+				return true
 			}
 			if d := rt.draggableAlong(t.x0, t.y0, axis); d != nil && d != rt.pressed {
 				// A row's content takes clicks, the row what goes across.
@@ -251,6 +261,12 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		}
 		if was.dragging {
 			return false
+		}
+		if was.edge {
+			t.sample(rt.now(), x, y)
+			vx, _ := t.velocity(rt.now())
+			rt.endEdgeSwipe(-vx)
+			return true
 		}
 		if was.waiting {
 			// A tap quicker than the delay: it presses, and lets go.
@@ -709,6 +725,8 @@ func (rt *engine) touchStep(now time.Time) {
 		rt.animating = true
 	}
 	rt.flingStep(now)
+	rt.settleSwipe(now)
+	rt.edgeBack = nil // the frame's Router tells
 }
 
 // flingStep moves flinging content on to now, slowing it down, and stops
@@ -819,6 +837,29 @@ func (rt *engine) longPress(t *touchPan) {
 // haptic plays a feel of the system's, on a device that has them.
 func (rt *engine) haptic(kind string) {
 	rt.touchSurface(func(s platform.TouchSurface) { s.Haptic(kind) })
+}
+
+// touchOver draws what fingers have over the frame, and tells the system
+// what the frame takes.
+func (rt *engine) touchOver(p *Painter) {
+	rt.paintHandles(p)
+	rt.tellBack()
+}
+
+// scrollToTop sends what scrolls under the top of the window back to its top,
+// as a tap on iOS's status bar does: a fling that ends just there.
+func (rt *engine) scrollToTop() {
+	w, h, _ := rt.host.size()
+	for _, id := range rt.hitChain(w/2, h/2) {
+		s := rt.states[id]
+		if s == nil || s.flags&flagScrollY == 0 || s.scrollY <= 0 {
+			continue
+		}
+		v := float32(s.scrollY) * -float32(math.Log(flingDecay)) * 1000
+		rt.flinging = fling{on: true, target: id, x: w / 2, y: h / 2, vy: -v - flingStop, at: rt.now()}
+		rt.requestFrame()
+		return
+	}
 }
 
 // lowMemory lets go of what the next frame makes again.

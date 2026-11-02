@@ -18,6 +18,7 @@ import (
 	"github.com/egoist/mygo/plugins/location"
 	"github.com/egoist/mygo/plugins/preferences"
 	"github.com/egoist/mygo/plugins/sensors"
+	"github.com/egoist/mygo/plugins/videoplayer"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/mobile"
 )
@@ -39,6 +40,8 @@ type app struct {
 	nextRow int
 
 	// Pages.
+	video    *videoplayer.Player
+	videoNow videoplayer.State
 	web      *mygo.WebView
 	overPage int
 	pages    mobile.PageState
@@ -184,7 +187,7 @@ func (a *app) pagesView(c *ui.Context) {
 		}
 		if a.web != nil {
 			// A web page among native UI, and native UI over it.
-			ui.Box(c).Height(160).Shrink(0).FillWidth().Children(func() {
+			ui.Box(c).Height(130).Shrink(0).FillWidth().Children(func() {
 				ui.WebView(c, a.web).Fill()
 				b := ui.Text(c, fmt.Sprintf("Native over the page: %d", a.overPage)).Absolute().Right(8).Bottom(8).Padding(6, 10).Radius(8).
 					Background(c.Theme().Accent).TextColor(c.Theme().AccentText).FontSize(13)
@@ -197,8 +200,9 @@ func (a *app) pagesView(c *ui.Context) {
 			ui.Box(c).Fill().Background(pageColors[i]).Center().Children(func() {
 				ui.Textf(c, "Page %d", i+1).FontSize(32).Bold().TextColor(ui.RGB(255, 255, 255))
 			})
-		}).Height(140).Shrink(0)
+		}).Height(110).Shrink(0)
 		mobile.PageDots(c, a.pages.Page, len(pageColors))
+		a.videoView(c)
 		heading(c, "Pinch to zoom, double tap, drag")
 		mobile.Zoomable(c, &a.zoom, mobile.ZoomOptions{}, func() {
 			ui.Box(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) {
@@ -215,6 +219,38 @@ func (a *app) pagesView(c *ui.Context) {
 				}
 			})
 		}).FillWidth().Grow(1).Basis(0)
+	})
+}
+
+const videoURL = "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8"
+
+// videoView plays a video in the view, with native UI's controls over it.
+func (a *app) videoView(c *ui.Context) {
+	if a.video == nil {
+		p, err := videoplayer.New(a.win, videoURL, videoplayer.Options{AutoPlay: true, Muted: true})
+		if err != nil {
+			ui.Text(c, err.Error()).PaddingX(16)
+			return
+		}
+		p.OnState(func(s videoplayer.State) { a.win.Update(func() { a.videoNow = s }) })
+		a.video = p
+	}
+	s := a.videoNow
+	ui.Box(c).Height(120).Shrink(0).FillWidth().Background(ui.RGB(0, 0, 0)).Children(func() {
+		ui.WebView(c, a.video).Fill()
+		label := "Pause"
+		if !s.Playing {
+			label = "Play"
+		}
+		b := ui.Text(c, fmt.Sprintf("%s %v / %v", label, s.Position.Truncate(time.Second), s.Duration.Truncate(time.Second))).Absolute().Left(8).Bottom(8).Padding(4, 8).Radius(6).
+			Background(ui.RGBA(0, 0, 0, 0.6)).TextColor(ui.RGB(255, 255, 255)).FontSize(13)
+		if b.Clicked() {
+			if s.Playing {
+				a.video.Pause()
+			} else {
+				a.video.Play()
+			}
+		}
 	})
 }
 

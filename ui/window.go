@@ -316,6 +316,14 @@ func (h *windowHost) event(ev platform.SurfaceEvent) bool {
 		h.requestFrame()
 		return false
 	}
+	if ev.Kind == platform.SurfaceBackGesture {
+		h.rt.backGesture(ev.Text, float32(ev.Scale))
+		return false
+	}
+	if ev.Kind == platform.SurfaceScrollToTop {
+		h.rt.scrollToTop()
+		return false
+	}
 	if ev.Kind == platform.SurfaceLowMemory {
 		// What the next frame makes again: the renderer's textures, its
 		// atlases and pipelines among them.

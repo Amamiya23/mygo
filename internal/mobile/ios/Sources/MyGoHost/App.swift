@@ -139,8 +139,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
 /// The view controller of the app's window, whose view holds the app's
 /// windows, the one in front last.
-final class RootViewController: UIViewController {
+final class RootViewController: UIViewController, UIScrollViewDelegate {
     var keyboard: CGFloat = 0
+    /// UIKit tells a scroll view of a tap on the status bar, the only way it
+    /// tells: this one shows nothing, and tells Go.
+    private let statusBarTap = UIScrollView()
     /// What the app asked of the system's bars and the screen's orientation.
     var barStyle = "auto"
     var barsHidden = false
@@ -161,6 +164,12 @@ final class RootViewController: UIViewController {
     override func loadView() {
         view = UIView()
         view.backgroundColor = .systemBackground
+        statusBarTap.scrollsToTop = true
+        statusBarTap.delegate = self
+        statusBarTap.contentSize = CGSize(width: 1, height: 3)
+        statusBarTap.contentOffset = CGPoint(x: 0, y: 1)
+        statusBarTap.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
+        view.addSubview(statusBarTap)
         let nc = NotificationCenter.default
         nc.addObserver(self, selector: #selector(keyboardChanged(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         nc.addObserver(self, selector: #selector(keyboardChanged(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
@@ -170,6 +179,11 @@ final class RootViewController: UIViewController {
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (_: RootViewController, _) in
             Go.send(Event.themeChanged())
         }
+    }
+
+    func scrollViewShouldScrollToTop(_ s: UIScrollView) -> Bool {
+        Go.send(Event.statusBarTapped())
+        return false
     }
 
     @objc func settingsChanged() { Go.send(Event.themeChanged()) }

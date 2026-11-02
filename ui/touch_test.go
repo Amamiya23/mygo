@@ -472,3 +472,72 @@ func TestTouchLeavesNoHover(t *testing.T) {
 		t.Errorf("hovering %v after the finger lifted", tt.rt.hover)
 	}
 }
+
+// A finger from the left edge takes a Router's page back, following it; let
+// go short of half the way, the page comes back.
+func TestTouchEdgeSwipeBack(t *testing.T) {
+	defer func(k overscroll) { overscrollKind = k }(overscrollKind)
+	overscrollKind = overscrollBounce
+	r := NewRouter("/a")
+	var c2 *context
+	tt := coreNewTester(func(c *context) {
+		c2 = c
+		r.coreView(c, func(rt *Route) { coreBox(c).Fill() })
+	}, 400, 400)
+	_ = c2
+	r.Push("/a/b")
+	tt.Frame()
+	tt.Advance(time.Second)
+	// Short of half the way: it stays.
+	tt.TouchDown(10, 200)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(30, 200)
+	tt.Frame()
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(100, 200)
+	tt.Frame()
+	if !r.swiping || r.swipe <= 0 {
+		t.Fatalf("following: swiping %v, %v", r.swiping, r.swipe)
+	}
+	tt.Advance(200 * time.Millisecond)
+	tt.TouchUp(100, 200)
+	for range 60 {
+		tt.Advance(16 * time.Millisecond)
+	}
+	if r.Path() != "/a/b" || r.swipe != 0 || r.settling {
+		t.Fatalf("given up: at %s, swipe %v, settling %v", r.Path(), r.swipe, r.settling)
+	}
+	// Past it: back.
+	tt.TouchDown(10, 200)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(30, 200)
+	tt.Frame()
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(300, 200)
+	tt.Frame()
+	tt.Advance(200 * time.Millisecond)
+	tt.TouchUp(300, 200)
+	tt.Frame()
+	if r.Path() != "/a" {
+		t.Errorf("past half the way: at %s", r.Path())
+	}
+}
+
+// Without a page to go back to, an edge swipe is any other finger.
+func TestTouchEdgeSwipeNowhere(t *testing.T) {
+	defer func(k overscroll) { overscrollKind = k }(overscrollKind)
+	overscrollKind = overscrollBounce
+	r := NewRouter("/a")
+	tt := coreNewTester(func(c *context) {
+		r.coreView(c, func(rt *Route) { coreBox(c).Fill() })
+	}, 400, 400)
+	tt.Frame()
+	tt.TouchDown(10, 200)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(30, 200)
+	tt.Frame()
+	if r.swiping {
+		t.Error("swiping with nowhere to go")
+	}
+	tt.TouchUp(30, 200)
+}

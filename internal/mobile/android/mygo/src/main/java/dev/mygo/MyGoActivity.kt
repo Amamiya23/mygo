@@ -3,6 +3,7 @@ package dev.mygo
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import androidx.activity.BackEventCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.core.view.WindowCompat
@@ -20,13 +21,24 @@ class MyGoActivity : ComponentActivity() {
         lastConfig = Configuration(resources.configuration)
         HostImpl.attach(this)
         HostImpl.applyBars()
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+        val back = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
                 // Back the app does not take leaves it running, as the
                 // system's launcher does with apps it goes back from.
                 if (!HostImpl.back()) moveTaskToBack(true)
             }
-        })
+
+            // Predictive back: the page follows the gesture.
+            private fun gesture(phase: String, progress: Double) {
+                (HostImpl.front() as? SurfaceWindow)?.let { Go.send(Event.backGesture(it.id, phase, progress)) }
+            }
+            override fun handleOnBackStarted(e: BackEventCompat) = gesture("started", 0.0)
+            override fun handleOnBackProgressed(e: BackEventCompat) = gesture("progress", e.progress.toDouble())
+            override fun handleOnBackCancelled() = gesture("cancelled", 0.0)
+        }
+        onBackPressedDispatcher.addCallback(this, back)
+        HostImpl.backCallback = back
+        HostImpl.updateBack()
         HostImpl.startGo(this, intent)
         openIntent(intent)
     }
