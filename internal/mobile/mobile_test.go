@@ -103,6 +103,7 @@ func (a *app) NetworkChanged(platform.NetworkStatus)             {}
 func (a *app) HotkeyPressed(int)                                 {}
 func (a *app) NotificationClicked(string)                        {}
 func (a *app) MediaCommand(platform.MediaCommand, time.Duration) {}
+func (a *app) MemoryWarning()                                    {}
 
 // startBackend runs a backend with a fake host, its loop on a goroutine of its
 // own, the main thread, and returns them once the app is ready.

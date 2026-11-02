@@ -716,36 +716,50 @@ class RequestFrameCall(
 class SetTextInputCall(
     @JvmField var id: Long = 0L,
     @JvmField var active: Boolean = false,
+    @JvmField var show: Long = 0L,
     @JvmField var x: Double = 0.0,
     @JvmField var y: Double = 0.0,
     @JvmField var width: Double = 0.0,
     @JvmField var height: Double = 0.0,
-    @JvmField var kind: String = "",
+    @JvmField var document: Boolean = false,
+    @JvmField var multiline: Boolean = false,
     @JvmField var secure: Boolean = false,
+    @JvmField var keyboard: String = "",
+    @JvmField var returnKey: String = "",
+    @JvmField var capitalize: String = "",
+    @JvmField var autocorrect: String = "",
+    @JvmField var autofill: String = "",
     @JvmField var text: String = "",
+    @JvmField var base: Long = 0L,
+    @JvmField var length: Long = 0L,
     @JvmField var selStart: Long = 0L,
     @JvmField var selEnd: Long = 0L,
+    @JvmField var markStart: Long = 0L,
+    @JvmField var markEnd: Long = 0L,
 ) {
     constructor(r: WireReader) : this() {
         id = r.int()
         active = r.bool()
+        show = r.int()
         x = r.float()
         y = r.float()
         width = r.float()
         height = r.float()
-        kind = r.string()
+        document = r.bool()
+        multiline = r.bool()
         secure = r.bool()
+        keyboard = r.string()
+        returnKey = r.string()
+        capitalize = r.string()
+        autocorrect = r.string()
+        autofill = r.string()
         text = r.string()
+        base = r.int()
+        length = r.int()
         selStart = r.int()
         selEnd = r.int()
-    }
-}
-
-class TextInputChangedCall(
-    @JvmField var id: Long = 0L,
-) {
-    constructor(r: WireReader) : this() {
-        id = r.int()
+        markStart = r.int()
+        markEnd = r.int()
     }
 }
 
@@ -1011,10 +1025,8 @@ interface HostCalls {
     fun haptic(c: HapticCall)
     /** asks for a Frame at the next refresh of the display */
     fun requestFrame(c: RequestFrameCall)
-    /** where the caret of the text being edited is, and whether the keyboard shows for it */
+    /** whether the keyboard shows and what for: the input's traits (platform.TextTraits), and its text. Show counts the requests to show the keyboard again. Offsets are UTF-16 units of the document, of which Text is the part around the selection, from Base; MarkStart is -1 without marked text. A window without Document takes text without one, as a terminal: the keyboard sees none */
     fun setTextInput(c: SetTextInputCall)
-    /** the text around the caret changed, which the keyboard's suggestions read again */
-    fun textInputChanged(c: TextInputChangedCall)
     /** the pointer's shape, for a mouse or a trackpad */
     fun setCursor(c: SetCursorCall)
     /** the tree of accessible elements changed; Focus names the one with the focus */
@@ -1092,16 +1104,15 @@ fun dispatchCall(h: HostCalls, buf: ByteArray): ByteArray? {
         51 -> h.haptic(HapticCall(r))
         52 -> h.requestFrame(RequestFrameCall(r))
         53 -> h.setTextInput(SetTextInputCall(r))
-        54 -> h.textInputChanged(TextInputChangedCall(r))
-        55 -> h.setCursor(SetCursorCall(r))
-        56 -> h.accessibilityChanged(AccessibilityChangedCall(r))
-        57 -> h.announce(AnnounceCall(r))
-        58 -> h.showMenu(ShowMenuCall(r))
-        59 -> { h.textMetrics(TextMetricsCall(r)).encode(w); return w.toByteArray() }
-        60 -> { h.measureText(MeasureTextCall(r)).encode(w); return w.toByteArray() }
-        61 -> { h.textAdvances(TextAdvancesCall(r)).encode(w); return w.toByteArray() }
-        62 -> { h.drawText(DrawTextCall(r)).encode(w); return w.toByteArray() }
-        63 -> { h.registerFont(RegisterFontCall(r)).encode(w); return w.toByteArray() }
+        54 -> h.setCursor(SetCursorCall(r))
+        55 -> h.accessibilityChanged(AccessibilityChangedCall(r))
+        56 -> h.announce(AnnounceCall(r))
+        57 -> h.showMenu(ShowMenuCall(r))
+        58 -> { h.textMetrics(TextMetricsCall(r)).encode(w); return w.toByteArray() }
+        59 -> { h.measureText(MeasureTextCall(r)).encode(w); return w.toByteArray() }
+        60 -> { h.textAdvances(TextAdvancesCall(r)).encode(w); return w.toByteArray() }
+        61 -> { h.drawText(DrawTextCall(r)).encode(w); return w.toByteArray() }
+        62 -> { h.registerFont(RegisterFontCall(r)).encode(w); return w.toByteArray() }
     }
     return null
 }
@@ -1121,7 +1132,7 @@ object Event {
         w.bool(active)
         return w.toByteArray()
     }
-    /** the app went to the background (true) or came back */
+    /** the app goes to the background (true) or came back. The host waits: iOS ends apps that use the GPU in the background, so that frames stop before it returns */
     @JvmStatic fun background(background: Boolean): ByteArray {
         val w = WireWriter()
         w.uvarint(3)
@@ -1410,67 +1421,107 @@ object Event {
         w.bool(repeated)
         return w.toByteArray()
     }
-    /** the keyboard typed Text, in place of the marked text if any */
-    @JvmStatic fun textInsert(id: Long, text: String): ByteArray {
+    /** the keyboard put Text in Start to End of the document, or with no range in place of the marked text or the selection; answers TextStateReply */
+    @JvmStatic fun textReplace(id: Long, hasRange: Boolean, start: Long, end: Long, text: String): ByteArray {
         val w = WireWriter()
         w.uvarint(38)
         w.int(id)
+        w.bool(hasRange)
+        w.int(start)
+        w.int(end)
         w.string(text)
         return w.toByteArray()
     }
-    /** the input method's text being composed, its selection in runes */
-    @JvmStatic fun textMarked(id: Long, text: String, selStart: Long, selEnd: Long): ByteArray {
+    /** the input method composes Text over Start to End, or with no range over the marked text or the selection; SelStart and SelEnd are in Text; answers TextStateReply */
+    @JvmStatic fun textMark(id: Long, hasRange: Boolean, start: Long, end: Long, text: String, selStart: Long, selEnd: Long): ByteArray {
         val w = WireWriter()
         w.uvarint(39)
         w.int(id)
+        w.bool(hasRange)
+        w.int(start)
+        w.int(end)
         w.string(text)
         w.int(selStart)
         w.int(selEnd)
         return w.toByteArray()
     }
-    /** the keyboard deleted Before runes before the caret and After after it */
-    @JvmStatic fun textDelete(id: Long, before: Long, after: Long): ByteArray {
+    /** the marked text stays as text; answers TextStateReply */
+    @JvmStatic fun textUnmark(id: Long): ByteArray {
         val w = WireWriter()
         w.uvarint(40)
+        w.int(id)
+        return w.toByteArray()
+    }
+    /** the keyboard deleted Before units before the selection and After after it; answers TextStateReply */
+    @JvmStatic fun textDelete(id: Long, before: Long, after: Long): ByteArray {
+        val w = WireWriter()
+        w.uvarint(41)
         w.int(id)
         w.int(before)
         w.int(after)
         return w.toByteArray()
     }
-    /** an editing action of the keyboard or the edit menu: "newline", "tab", "cut", "copy", "paste", "selectAll", "left", … */
-    @JvmStatic fun textCommand(id: Long, command: String): ByteArray {
-        val w = WireWriter()
-        w.uvarint(41)
-        w.int(id)
-        w.string(command)
-        return w.toByteArray()
-    }
-    /** the text around the caret and the selection, in runes, for the keyboard's suggestions */
-    @JvmStatic fun textState(id: Long): ByteArray {
-        val w = WireWriter()
-        w.uvarint(42)
-        w.int(id)
-        return w.toByteArray()
-    }
-    /** the keyboard moved the caret or the selection, by runes from the caret */
+    /** the keyboard moved the selection; answers TextStateReply */
     @JvmStatic fun textSelect(id: Long, start: Long, end: Long): ByteArray {
         val w = WireWriter()
-        w.uvarint(43)
+        w.uvarint(42)
         w.int(id)
         w.int(start)
         w.int(end)
         return w.toByteArray()
     }
-    /** the keyboard went away */
-    @JvmStatic fun textInputEnded(id: Long): ByteArray {
+    /** an editing action of the keyboard or the edit menu: "newline", "tab", "deleteBackward", "deleteForward", "cut", "copy", "paste", "selectAll", "left", …; answers TextStateReply */
+    @JvmStatic fun textCommand(id: Long, command: String): ByteArray {
+        val w = WireWriter()
+        w.uvarint(43)
+        w.int(id)
+        w.string(command)
+        return w.toByteArray()
+    }
+    /** the text around the selection, and the selection */
+    @JvmStatic fun textState(id: Long): ByteArray {
         val w = WireWriter()
         w.uvarint(44)
         w.int(id)
         return w.toByteArray()
     }
-    @JvmStatic fun menuChosen(id: Long, req: Long, action: String): ByteArray {
+    /** a part of the document outside the text the host has */
+    @JvmStatic fun textRange(id: Long, start: Long, end: Long): ByteArray {
         val w = WireWriter()
         w.uvarint(45)
+        w.int(id)
+        w.int(start)
+        w.int(end)
+        return w.toByteArray()
+    }
+    /** where the range is on screen: its first line's rectangle */
+    @JvmStatic fun textBounds(id: Long, start: Long, end: Long): ByteArray {
+        val w = WireWriter()
+        w.uvarint(46)
+        w.int(id)
+        w.int(start)
+        w.int(end)
+        return w.toByteArray()
+    }
+    /** the offset nearest a point of the window */
+    @JvmStatic fun textIndexAt(id: Long, x: Double, y: Double): ByteArray {
+        val w = WireWriter()
+        w.uvarint(47)
+        w.int(id)
+        w.float(x)
+        w.float(y)
+        return w.toByteArray()
+    }
+    /** the keyboard went away */
+    @JvmStatic fun textInputEnded(id: Long): ByteArray {
+        val w = WireWriter()
+        w.uvarint(48)
+        w.int(id)
+        return w.toByteArray()
+    }
+    @JvmStatic fun menuChosen(id: Long, req: Long, action: String): ByteArray {
+        val w = WireWriter()
+        w.uvarint(49)
         w.int(id)
         w.int(req)
         w.string(action)
@@ -1479,18 +1530,23 @@ object Event {
     /** the accessible elements, encoded as Nodes: for each, its ID, parent, role, label, value, hint, frame and actions */
     @JvmStatic fun accessibilityTree(id: Long): ByteArray {
         val w = WireWriter()
-        w.uvarint(46)
+        w.uvarint(50)
         w.int(id)
         return w.toByteArray()
     }
     /** an assistive technology's action on an element: "press", "increment", "decrement", "focus", "scrollForward", … */
     @JvmStatic fun accessibilityAction(id: Long, node: Long, action: String): ByteArray {
         val w = WireWriter()
-        w.uvarint(47)
+        w.uvarint(51)
         w.int(id)
         w.int(node)
         w.string(action)
         return w.toByteArray()
+    }
+}
+
+class BackgroundReply() {
+    constructor(r: WireReader) : this() {
     }
 }
 
@@ -1539,23 +1595,101 @@ class KeyReply(
     }
 }
 
+class TextReplaceReply() {
+    constructor(r: WireReader) : this() {
+    }
+}
+
+class TextMarkReply() {
+    constructor(r: WireReader) : this() {
+    }
+}
+
+class TextUnmarkReply() {
+    constructor(r: WireReader) : this() {
+    }
+}
+
+class TextDeleteReply() {
+    constructor(r: WireReader) : this() {
+    }
+}
+
+class TextSelectReply() {
+    constructor(r: WireReader) : this() {
+    }
+}
+
+class TextCommandReply() {
+    constructor(r: WireReader) : this() {
+    }
+}
+
 class TextStateReply(
-    @JvmField var before: String = "",
-    @JvmField var selected: String = "",
-    @JvmField var after: String = "",
-    @JvmField var marked: Long = 0L,
-    @JvmField var caretX: Double = 0.0,
-    @JvmField var caretY: Double = 0.0,
-    @JvmField var caretHeight: Double = 0.0,
+    @JvmField var text: String = "",
+    @JvmField var base: Long = 0L,
+    @JvmField var length: Long = 0L,
+    @JvmField var selStart: Long = 0L,
+    @JvmField var selEnd: Long = 0L,
+    @JvmField var markStart: Long = 0L,
+    @JvmField var markEnd: Long = 0L,
+    @JvmField var x: Double = 0.0,
+    @JvmField var y: Double = 0.0,
+    @JvmField var width: Double = 0.0,
+    @JvmField var height: Double = 0.0,
 ) {
     constructor(r: WireReader) : this() {
-        before = r.string()
-        selected = r.string()
-        after = r.string()
-        marked = r.int()
-        caretX = r.float()
-        caretY = r.float()
-        caretHeight = r.float()
+        text = r.string()
+        base = r.int()
+        length = r.int()
+        selStart = r.int()
+        selEnd = r.int()
+        markStart = r.int()
+        markEnd = r.int()
+        x = r.float()
+        y = r.float()
+        width = r.float()
+        height = r.float()
+    }
+}
+
+class TextRangeReply(
+    @JvmField var text: String = "",
+    @JvmField var start: Long = 0L,
+    @JvmField var end: Long = 0L,
+) {
+    constructor(r: WireReader) : this() {
+        text = r.string()
+        start = r.int()
+        end = r.int()
+    }
+}
+
+class TextBoundsReply(
+    @JvmField var ok: Boolean = false,
+    @JvmField var x: Double = 0.0,
+    @JvmField var y: Double = 0.0,
+    @JvmField var width: Double = 0.0,
+    @JvmField var height: Double = 0.0,
+    @JvmField var end: Long = 0L,
+) {
+    constructor(r: WireReader) : this() {
+        ok = r.bool()
+        x = r.float()
+        y = r.float()
+        width = r.float()
+        height = r.float()
+        end = r.int()
+    }
+}
+
+class TextIndexAtReply(
+    @JvmField var ok: Boolean = false,
+    @JvmField var index: Long = 0L,
+) {
+    constructor(r: WireReader) : this() {
+        ok = r.bool()
+        index = r.int()
     }
 }
 

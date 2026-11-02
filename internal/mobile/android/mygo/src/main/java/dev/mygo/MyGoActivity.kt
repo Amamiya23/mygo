@@ -38,13 +38,20 @@ class MyGoActivity : ComponentActivity() {
     }
 
     private fun openIntent(intent: Intent?) {
-        val data = intent?.data ?: return
+        intent ?: return
+        // A notification tapped: once, as the Activity is made again with
+        // the same Intent after Android ends the process.
+        intent.getStringExtra("mygo.notification")?.let {
+            intent.removeExtra("mygo.notification")
+            Go.send(Event.notificationClicked(it))
+        }
+        val data = intent.data ?: return
         if (intent.action == Intent.ACTION_VIEW) Go.send(Event.openURLs(listOf(data.toString())))
     }
 
     override fun onResume() {
         super.onResume()
-        Go.send(Event.background(false))
+        Go.ask(Event.background(false))
         Go.send(Event.active(true))
     }
 
@@ -54,7 +61,7 @@ class MyGoActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        Go.send(Event.background(true))
+        Go.ask(Event.background(true))
         super.onStop()
     }
 
@@ -83,6 +90,15 @@ class MyGoActivity : ComponentActivity() {
     override fun onLowMemory() {
         super.onLowMemory()
         Go.send(Event.memoryWarning())
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // Running low, or next to be ended in the background.
+        @Suppress("DEPRECATION")
+        if (level == TRIM_MEMORY_RUNNING_LOW || level == TRIM_MEMORY_RUNNING_CRITICAL || level >= TRIM_MEMORY_MODERATE) {
+            Go.send(Event.memoryWarning())
+        }
     }
 
     override fun onDestroy() {

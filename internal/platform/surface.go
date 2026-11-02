@@ -200,6 +200,33 @@ type TextInputState struct {
 	// composed, as winit's set_ime_allowed(false). Browsers cannot turn
 	// input methods off, and ignore it.
 	NoInputMethod bool
+	// Traits describe the input to on-screen keyboards.
+	Traits TextTraits
+	// ShowKeyboard counts the requests for the on-screen keyboard to show,
+	// as a finger taps the input again after the keyboard was dismissed
+	// while it kept the focus.
+	ShowKeyboard uint32
+}
+
+// TextTraits describe a text input to on-screen keyboards, as phones have.
+// Other platforms ignore them. Empty values are the keyboard's defaults.
+type TextTraits struct {
+	// Keyboard is the layout: "email", "number", "decimal", "phone", "url"
+	// or "search".
+	Keyboard string
+	// ReturnKey is what the return key says: "done", "go", "next", "search"
+	// or "send".
+	ReturnKey string
+	// Capitalize is "none", "words", "sentences" or "characters".
+	Capitalize string
+	// Autocorrect is "on" or "off".
+	Autocorrect string
+	// Autofill names what the input holds, for the system's passwords and
+	// contacts: "username", "password", "newPassword", "oneTimeCode",
+	// "email", "name", "phone", "address", "postalCode", "creditCard".
+	Autofill string
+	// Multiline and Secure tell a text area and a password field.
+	Multiline, Secure bool
 }
 
 // SurfaceNative holds the native objects of a Surface.
@@ -325,6 +352,9 @@ const (
 	// the surface has the keyboard again, and the content moves the focus
 	// on from the web view's element.
 	WebViewTabOut
+	// SurfaceLowMemory reports that the system is short of memory: the
+	// content lets go of what it can make again.
+	SurfaceLowMemory
 )
 
 // EditCommands are the menu roles of edit commands, which native UI takes as

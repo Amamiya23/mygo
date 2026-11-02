@@ -3,7 +3,6 @@ package mobile
 import (
 	"math"
 	"strconv"
-	"unicode/utf8"
 
 	"github.com/egoist/mygo/internal/mobile/wire"
 	"github.com/egoist/mygo/internal/platform"
@@ -24,6 +23,8 @@ type surface struct {
 
 	pending bool // a frame asked of the host
 	gone    bool
+	// deferred is a frame the app in the background did not draw.
+	deferred bool
 
 	// The fingers on the screen, by the host's numbers: the first is the
 	// pointer, two pinch.
@@ -36,7 +37,7 @@ type surface struct {
 	taps                            int
 
 	text     platform.TextInputState
-	textOn   bool
+	textSent wire.SetTextInput
 	marked   string
 	access   *platform.AccessTree
 	accessOn bool
@@ -70,7 +71,8 @@ func (s *surface) closed() {
 
 func (s *surface) themeChanged() { s.RequestFrame() }
 
-func (s *surface) idle() {}
+// lowMemory has the content let go of what it can make again.
+func (s *surface) lowMemory() { s.send(platform.SurfaceEvent{Kind: platform.SurfaceLowMemory}) }
 
 // back hands Android's back to the content: Escape, which closes a menu
 // or a dialog, then the Back key, as a mouse's back button, which a
@@ -120,7 +122,24 @@ func (s *surface) frame() {
 	if s.gone || s.handle == 0 || s.w.width == 0 {
 		return
 	}
+	// The GPU is not ours in the background, and iOS ends apps that use it
+	// there. The content draws again as the app comes back (surfaces asks).
+	if s.w.b.background {
+		s.deferred = true
+		return
+	}
 	s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
+	if s.text.Active {
+		s.syncText()
+	}
+}
+
+// foreground draws the frame the background held back.
+func (s *surface) foreground() {
+	if s.deferred {
+		s.deferred = false
+		s.RequestFrame()
+	}
 }
 
 // PresentPixels has nothing to show frames drawn in memory on: phones
@@ -138,21 +157,6 @@ func (s *surface) SetBackground(c platform.Color) {
 	}
 	s.w.bg = c
 	s.w.b.call(&wire.SetBackground{ID: s.w.id, Color: rgba(c)}, nil)
-}
-
-// SetTextInput shows the keyboard while an element takes text, and gives
-// the host the text around the caret, which the keyboard's suggestions
-// and input methods read.
-func (s *surface) SetTextInput(t platform.TextInputState) {
-	if t.Active == s.text.Active && t.Caret == s.text.Caret && t.Text == s.text.Text && t.Start == s.text.Start && t.End == s.text.End {
-		return
-	}
-	s.text = t
-	if !t.Active {
-		s.marked = ""
-	}
-	s.w.b.call(&wire.SetTextInput{ID: s.w.id, Active: t.Active, X: t.Caret.X, Y: t.Caret.Y, Width: t.Caret.W, Height: t.Caret.H,
-		Kind: "text", Text: t.Text, SelStart: t.Start, SelEnd: t.End}, nil)
 }
 
 func (s *surface) UpdateAccessibility(tree *platform.AccessTree) {
@@ -327,37 +331,6 @@ func keyOf(name string) platform.Key {
 	return platform.KeyUnknown
 }
 
-// typed hands the keyboard's text to the content: a new line or a tab as
-// its key, which submits a field or moves the focus, other text as typed.
-func (s *surface) typed(text string) {
-	s.marked = ""
-	switch text {
-	case "\n":
-		s.key(platform.KeyEnter)
-	case "\t":
-		s.key(platform.KeyTab)
-	default:
-		s.send(platform.SurfaceEvent{Kind: platform.TextInput, Text: text})
-	}
-}
-
-func (s *surface) key(k platform.Key) {
-	s.send(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: k, PhysicalKey: k})
-	s.send(platform.SurfaceEvent{Kind: platform.KeyReleased, Key: k, PhysicalKey: k})
-}
-
-// textState is the text around the caret, for the keyboard.
-func (s *surface) textState() wire.TextStateReply {
-	t := s.text
-	r := []rune(t.Text)
-	start, end := max(0, min(t.Start, len(r))), max(0, min(t.End, len(r)))
-	if start > end {
-		start, end = end, start
-	}
-	return wire.TextStateReply{Before: string(r[:start]), Selected: string(r[start:end]), After: string(r[end:]),
-		Marked: utf8.RuneCountInString(s.marked), CaretX: t.Caret.X, CaretY: t.Caret.Y, CaretHeight: t.Caret.H}
-}
-
 // accessTree encodes the content's accessible elements for the host,
 // asking the content for them first if it was not giving them yet.
 func (s *surface) accessTree() []byte {
@@ -478,56 +451,9 @@ func (b *Backend) handleSurface(op uint64, r *wire.Reader, w *wire.Writer) bool 
 			reply.Handled = s.send(platform.SurfaceEvent{Kind: kind, Key: k, PhysicalKey: k, Mods: platform.Modifiers(e.Mods), Repeat: e.Repeated})
 		}
 		reply.Encode(w)
-	case wire.EventTextInsert:
-		var e wire.TextInsertEvent
-		e.Decode(r)
-		if s := sf(e.ID); s != nil {
-			s.typed(e.Text)
-		}
-	case wire.EventTextMarked:
-		var e wire.TextMarkedEvent
-		e.Decode(r)
-		if s := sf(e.ID); s != nil {
-			s.marked = e.Text
-			s.send(platform.SurfaceEvent{Kind: platform.TextComposition, Text: e.Text, Caret: e.SelEnd})
-		}
-	case wire.EventTextDelete:
-		var e wire.TextDeleteEvent
-		e.Decode(r)
-		if s := sf(e.ID); s != nil {
-			for range e.Before {
-				s.key(platform.KeyBackspace)
-			}
-			for range e.After {
-				s.key(platform.KeyDelete)
-			}
-		}
-	case wire.EventTextCommand:
-		var e wire.TextCommandEvent
-		e.Decode(r)
-		if s := sf(e.ID); s != nil {
-			switch e.Command {
-			case "newline":
-				s.key(platform.KeyEnter)
-			case "tab":
-				s.key(platform.KeyTab)
-			case "left", "right", "up", "down":
-				s.key(map[string]platform.Key{"left": platform.KeyLeft, "right": platform.KeyRight, "up": platform.KeyUp, "down": platform.KeyDown}[e.Command])
-			default:
-				s.send(platform.SurfaceEvent{Kind: platform.SurfaceCommand, Text: e.Command})
-			}
-		}
-	case wire.EventTextState:
-		var e wire.TextStateEvent
-		e.Decode(r)
-		reply := wire.TextStateReply{}
-		if s := sf(e.ID); s != nil {
-			reply = s.textState()
-		}
-		reply.Encode(w)
-	case wire.EventTextSelect, wire.EventTextInputEnded:
-		// The content keeps its selection, and the focus, as the keyboard
-		// goes: a tap elsewhere moves them.
+	case wire.EventTextReplace, wire.EventTextMark, wire.EventTextUnmark, wire.EventTextDelete, wire.EventTextSelect,
+		wire.EventTextCommand, wire.EventTextState, wire.EventTextRange, wire.EventTextBounds, wire.EventTextIndexAt, wire.EventTextInputEnded:
+		b.textEvent(op, r, w)
 	case wire.EventMenuChosen:
 		var e wire.MenuChosenEvent
 		e.Decode(r)

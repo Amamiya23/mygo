@@ -175,6 +175,9 @@ type AppHandler interface {
 	// MediaCommand reports a media key or a remote command for what
 	// NowPlaying shows; position is where MediaSeek asks to go.
 	MediaCommand(cmd MediaCommand, position time.Duration)
+	// MemoryWarning reports that the system is short of memory, on the
+	// systems that say: phones end apps that keep too much.
+	MemoryWarning()
 }
 
 // AppController exposes application level native features.

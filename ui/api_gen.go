@@ -2970,6 +2970,31 @@ func (_handle Element) AutoFocus() Element {
 	return wrapElement(_node.AutoFocus())
 }
 
+// Autocorrect turns an on-screen keyboard's corrections and suggestions on
+// or off for a text input, on by default where the keyboard has them.
+func (_handle Element) Autocorrect(on bool) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Autocorrect(on))
+}
+
+// Autofill tells the system what a text input holds, for it to offer it
+// from its passwords and contacts, as with iOS's Passwords above the
+// keyboard.
+func (_handle Element) Autofill(k AutofillKind) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Autofill(k))
+}
+
 // BackfaceHidden hides the element, and takes it from the pointer, while
 // its 3D transform turns its back to the viewer, as CSS's
 // backface-visibility: hidden: the two faces of a card turning over, the
@@ -3234,6 +3259,17 @@ func (_handle Element) Cache() Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Cache())
+}
+
+// Capitalize sets what an on-screen keyboard capitalizes as one types.
+func (_handle Element) Capitalize(c Capitalization) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Capitalize(c))
 }
 
 // CaretWidth sets this input's painted caret width in DIPs for this build.
@@ -4589,6 +4625,18 @@ func (_handle Element) KeepScrollbars(keep bool) Element {
 	return wrapElement(_node.KeepScrollbars(keep))
 }
 
+// Keyboard chooses the on-screen keyboard's layout for a text input, on
+// phones and tablets.
+func (_handle Element) Keyboard(k KeyboardType) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Keyboard(k))
+}
+
 // Keyframes plays a sequence, holding its last value when done. It starts
 // on the first call, with the first frame's value. Keep the element and
 // key stable, and change Run when changing the sequence. Only active
@@ -5380,6 +5428,19 @@ func (_handle Element) ReadOnly(on bool) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.ReadOnly(on))
+}
+
+// ReturnKey sets what the return key of an on-screen keyboard says, for a
+// single-line input. It submits the input as Enter does; ReturnNext moves
+// the focus on as well.
+func (_handle Element) ReturnKey(k ReturnKeyType) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.ReturnKey(k))
 }
 
 // Reverse lays the children out in the other direction: a Row from right

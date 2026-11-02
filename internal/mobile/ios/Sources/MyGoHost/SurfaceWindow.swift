@@ -11,14 +11,26 @@ final class SurfaceWindow: HostWindow, UITextInput {
     private var fingers: [ObjectIdentifier: Int] = [:]
     private var nextFinger = 1
 
-    // The text being edited, as Go last told it (SetTextInput): its runes,
-    // the selection in them, and the input method's text being composed.
-    private var text: [Character] = []
+    // The input being edited, as Go last told it: the text around the
+    // selection, from base, and offsets in UTF-16 units of the document,
+    // which is what UITextInput's NSRanges count in.
+    private var text: [UInt16] = []
+    private var base = 0, length = 0
     private var selStart = 0, selEnd = 0
-    private var marked: String?
+    private var markStart = -1, markEnd = -1
     private var caret = CGRect.zero
     private var editing = false
-    private var secure = false
+    private var hasDocument = false
+    private var shows = 0
+
+    // The input's traits, which the keyboard reads as it shows.
+    var keyboardType: UIKeyboardType = .default
+    var returnKeyType: UIReturnKeyType = .default
+    var autocapitalizationType: UITextAutocapitalizationType = .sentences
+    var autocorrectionType: UITextAutocorrectionType = .default
+    var spellCheckingType: UITextSpellCheckingType = .default
+    var isSecureTextEntry = false
+    var textContentType: UITextContentType! = nil
 
     private var elements: [AccessElement]?
 
@@ -133,26 +145,97 @@ final class SurfaceWindow: HostWindow, UITextInput {
     func setTextInput(_ c: SetTextInputCall) {
         let wasEditing = editing
         editing = c.active
-        secure = c.secure
-        caret = CGRect(x: c.x, y: c.y, width: max(c.width, 1), height: max(c.height, 1))
-        let newText = Array(c.text)
-        let changed = newText != text || c.selStart != selStart || c.selEnd != selEnd
-        if changed { inputDelegate?.textWillChange(self) }
-        text = newText
-        selStart = max(0, min(c.selStart, text.count))
-        selEnd = max(0, min(c.selEnd, text.count))
-        if changed { inputDelegate?.textDidChange(self) }
-        if editing && !isFirstResponder {
+        hasDocument = c.document
+        caret = CGRect(x: c.x, y: c.y, width: max(c.width, 2), height: max(c.height, 1))
+        let traitsChanged = setTraits(c)
+        let selChanged = c.selStart != selStart || c.selEnd != selEnd
+        let textChanged = c.base != base || c.length != length || Array(c.text.utf16) != text || c.markStart != markStart
+        if textChanged { inputDelegate?.textWillChange(self) }
+        if selChanged { inputDelegate?.selectionWillChange(self) }
+        apply(text: c.text, base: c.base, length: c.length, selStart: c.selStart, selEnd: c.selEnd, markStart: c.markStart, markEnd: c.markEnd)
+        if selChanged { inputDelegate?.selectionDidChange(self) }
+        if textChanged { inputDelegate?.textDidChange(self) }
+        if editing && (!isFirstResponder || c.show != shows) {
             becomeFirstResponder()
         } else if !editing && wasEditing && isFirstResponder {
-            marked = nil
             resignFirstResponder()
+        } else if editing && traitsChanged {
+            reloadInputViews()
         }
+        shows = c.show
     }
 
-    func textInputChanged() {
-        inputDelegate?.selectionWillChange(self)
-        inputDelegate?.selectionDidChange(self)
+    private func setTraits(_ c: SetTextInputCall) -> Bool {
+        let kb: UIKeyboardType
+        switch c.keyboard {
+        case "email": kb = .emailAddress
+        case "number": kb = .numberPad
+        case "decimal": kb = .decimalPad
+        case "phone": kb = .phonePad
+        case "url": kb = .URL
+        case "search": kb = .webSearch
+        default: kb = .default
+        }
+        let ret: UIReturnKeyType
+        switch c.returnKey {
+        case "done": ret = .done
+        case "go": ret = .go
+        case "next": ret = .next
+        case "search": ret = .search
+        case "send": ret = .send
+        default: ret = .default
+        }
+        let caps: UITextAutocapitalizationType
+        switch c.capitalize {
+        case "none": caps = .none
+        case "words": caps = .words
+        case "characters": caps = .allCharacters
+        case "sentences": caps = .sentences
+        default: caps = (kb == .default || kb == .webSearch) && !c.secure ? .sentences : .none
+        }
+        let correct: UITextAutocorrectionType = c.autocorrect == "off" || c.secure ? .no : c.autocorrect == "on" ? .yes : .default
+        let content: UITextContentType?
+        switch c.autofill {
+        case "username": content = .username
+        case "password": content = .password
+        case "newPassword": content = .newPassword
+        case "oneTimeCode": content = .oneTimeCode
+        case "email": content = .emailAddress
+        case "name": content = .name
+        case "phone": content = .telephoneNumber
+        case "address": content = .fullStreetAddress
+        case "postalCode": content = .postalCode
+        case "creditCard": content = .creditCardNumber
+        default: content = nil
+        }
+        let changed = kb != keyboardType || ret != returnKeyType || caps != autocapitalizationType || correct != autocorrectionType ||
+            c.secure != isSecureTextEntry || content != textContentType
+        keyboardType = kb
+        returnKeyType = ret
+        autocapitalizationType = caps
+        autocorrectionType = correct
+        spellCheckingType = correct == .no ? .no : .default
+        isSecureTextEntry = c.secure
+        textContentType = content
+        return changed
+    }
+
+    private func apply(text t: String, base b: Int, length l: Int, selStart s: Int, selEnd e: Int, markStart ms: Int, markEnd me: Int) {
+        text = Array(t.utf16)
+        base = b
+        length = l
+        selStart = s
+        selEnd = e
+        markStart = ms
+        markEnd = me
+    }
+
+    /// Sends an edit and takes the state after it, which the keyboard goes
+    /// on to read at once.
+    private func edit(_ msg: [UInt8]) {
+        guard let st = Go.answer(msg, { TextStateReply(&$0) }) else { return }
+        apply(text: st.text, base: st.base, length: st.length, selStart: st.selStart, selEnd: st.selEnd, markStart: st.markStart, markEnd: st.markEnd)
+        caret = CGRect(x: st.x, y: st.y, width: max(st.width, 2), height: max(st.height, 1))
     }
 
     override func resignFirstResponder() -> Bool {
@@ -161,102 +244,57 @@ final class SurfaceWindow: HostWindow, UITextInput {
         return r
     }
 
-    var keyboardType: UIKeyboardType = .default
-    var isSecureTextEntry: Bool { secure }
-    var autocorrectionType: UITextAutocorrectionType = .default
+    var hasText: Bool { length > 0 }
 
-    var hasText: Bool { !text.isEmpty }
-
-    func insertText(_ s: String) {
-        marked = nil
-        Go.send(Event.textInsert(id: id, text: s))
-        // Until Go says, the text as it will be.
-        let lo = min(selStart, selEnd), hi = max(selStart, selEnd)
-        if s != "\n" {
-            text.replaceSubrange(lo..<hi, with: Array(s))
-            selStart = lo + s.count
-            selEnd = selStart
-        }
-    }
+    func insertText(_ s: String) { edit(Event.textReplace(id: id, hasRange: false, start: 0, end: 0, text: s)) }
 
     func deleteBackward() {
-        if marked != nil {
-            setMarkedText(nil, selectedRange: NSRange(location: 0, length: 0))
+        if markStart >= 0 {
+            edit(Event.textMark(id: id, hasRange: false, start: 0, end: 0, text: "", selStart: 0, selEnd: 0))
             return
         }
-        Go.send(Event.textDelete(id: id, before: 1, after: 0))
-        let lo = min(selStart, selEnd), hi = max(selStart, selEnd)
-        if hi > lo {
-            text.removeSubrange(lo..<hi)
-            selStart = lo
-        } else if lo > 0 {
-            text.remove(at: lo - 1)
-            selStart = lo - 1
-        }
-        selEnd = selStart
+        edit(Event.textCommand(id: id, command: "deleteBackward"))
     }
 
-    // UITextInput: the document is the text around the caret, the marked
-    // text standing for the selection while an input method composes.
+    // UITextInput: the document, by UTF-16 offsets.
 
-    private var document: [Character] {
-        guard let m = marked else { return text }
-        let lo = min(selStart, selEnd), hi = max(selStart, selEnd)
-        return Array(text[..<lo]) + Array(m) + Array(text[hi...])
-    }
-
-    private func pos(_ i: Int) -> Position { Position(max(0, min(i, document.count))) }
+    private func pos(_ i: Int) -> Position { Position(max(0, min(i, length))) }
 
     var selectedTextRange: UITextRange? {
-        get {
-            if let m = marked {
-                let at = min(selStart, selEnd) + m.count
-                return Range(pos(at), pos(at))
-            }
-            return Range(pos(selStart), pos(selEnd))
-        }
+        get { Range(pos(selStart), pos(selEnd)) }
         set {
-            guard let r = newValue as? Range else { return }
-            Go.send(Event.textSelect(id: id, start: r.lo.i - selStart, end: r.hi.i - selStart))
+            guard let r = newValue as? Range, r.lo.i != selStart || r.hi.i != selEnd else { return }
+            edit(Event.textSelect(id: id, start: r.lo.i, end: r.hi.i))
         }
     }
 
-    var markedTextRange: UITextRange? {
-        guard let m = marked else { return nil }
-        let lo = min(selStart, selEnd)
-        return Range(pos(lo), pos(lo + m.count))
-    }
+    var markedTextRange: UITextRange? { markStart < 0 ? nil : Range(pos(markStart), pos(markEnd)) }
 
     var markedTextStyle: [NSAttributedString.Key: Any]?
 
     func setMarkedText(_ s: String?, selectedRange: NSRange) {
         let m = s ?? ""
-        marked = m.isEmpty ? nil : m
-        let sel = min(selectedRange.location + selectedRange.length, m.count)
-        Go.send(Event.textMarked(id: id, text: m, selStart: min(selectedRange.location, m.count), selEnd: sel))
+        edit(Event.textMark(id: id, hasRange: false, start: 0, end: 0, text: m, selStart: selectedRange.location,
+                            selEnd: selectedRange.location + selectedRange.length))
     }
 
-    func unmarkText() {
-        guard let m = marked else { return }
-        insertText(m)
-    }
+    func unmarkText() { edit(Event.textUnmark(id: id)) }
 
     var beginningOfDocument: UITextPosition { pos(0) }
-    var endOfDocument: UITextPosition { pos(document.count) }
+    var endOfDocument: UITextPosition { pos(length) }
 
     func text(in range: UITextRange) -> String? {
         guard let r = range as? Range else { return nil }
-        let d = document
-        let lo = max(0, min(r.lo.i, d.count)), hi = max(lo, min(r.hi.i, d.count))
-        return String(d[lo..<hi])
+        let lo = r.lo.i - base, hi = r.hi.i - base
+        if lo >= 0 && hi <= text.count {
+            return String(decoding: text[lo..<hi], as: UTF16.self)
+        }
+        return Go.answer(Event.textRange(id: id, start: r.lo.i, end: r.hi.i)) { TextRangeReply(&$0).text }
     }
 
     func replace(_ range: UITextRange, withText s: String) {
         guard let r = range as? Range else { return }
-        let lo = min(selStart, selEnd), hi = max(selStart, selEnd)
-        let before = max(0, lo - r.lo.i), after = max(0, r.hi.i - hi)
-        if before > 0 || after > 0 { Go.send(Event.textDelete(id: id, before: before, after: after)) }
-        if !s.isEmpty { insertText(s) }
+        edit(Event.textReplace(id: id, hasRange: true, start: r.lo.i, end: r.hi.i, text: s))
     }
 
     func textRange(from: UITextPosition, to: UITextPosition) -> UITextRange? {
@@ -267,13 +305,19 @@ final class SurfaceWindow: HostWindow, UITextInput {
     func position(from p: UITextPosition, offset: Int) -> UITextPosition? {
         guard let p = p as? Position else { return nil }
         let i = p.i + offset
-        return i < 0 || i > document.count ? nil : pos(i)
+        return i < 0 || i > length ? nil : pos(i)
     }
 
     func position(from p: UITextPosition, in direction: UITextLayoutDirection, offset: Int) -> UITextPosition? {
+        guard let p = p as? Position else { return nil }
         switch direction {
-        case .left, .up: return position(from: p, offset: -offset)
-        default: return position(from: p, offset: offset)
+        case .left: return position(from: p, offset: -offset)
+        case .right: return position(from: p, offset: offset)
+        default:
+            // A line up or down from the caret's place.
+            let r = rect(p.i, p.i)
+            let step = max(r.height, 1) * CGFloat(offset) * (direction == .up ? -1 : 1)
+            return closestPosition(to: CGPoint(x: r.midX, y: r.midY + step))
         }
     }
 
@@ -296,17 +340,59 @@ final class SurfaceWindow: HostWindow, UITextInput {
 
     func characterRange(byExtending p: UITextPosition, in direction: UITextLayoutDirection) -> UITextRange? {
         guard let p = p as? Position else { return nil }
-        return direction == .left || direction == .up ? Range(pos(0), p) : Range(p, pos(document.count))
+        return direction == .left || direction == .up ? Range(pos(0), p) : Range(p, pos(length))
     }
 
     func baseWritingDirection(for p: UITextPosition, in d: UITextStorageDirection) -> NSWritingDirection { .natural }
     func setBaseWritingDirection(_ d: NSWritingDirection, for r: UITextRange) {}
-    func firstRect(for range: UITextRange) -> CGRect { caret }
-    func caretRect(for p: UITextPosition) -> CGRect { caret }
-    func selectionRects(for range: UITextRange) -> [UITextSelectionRect] { [] }
-    func closestPosition(to point: CGPoint) -> UITextPosition? { pos(selEnd) }
-    func closestPosition(to point: CGPoint, within range: UITextRange) -> UITextPosition? { (range as? Range)?.hi }
-    func characterRange(at point: CGPoint) -> UITextRange? { nil }
+
+    /// Where the range's first line is, the caret if Go does not tell.
+    private func rect(_ start: Int, _ end: Int) -> CGRect {
+        guard hasDocument, let b = Go.answer(Event.textBounds(id: id, start: start, end: end), { TextBoundsReply(&$0) }), b.ok else { return caret }
+        return CGRect(x: b.x, y: b.y, width: b.width, height: max(b.height, 1))
+    }
+
+    func firstRect(for range: UITextRange) -> CGRect {
+        guard let r = range as? Range else { return caret }
+        return rect(r.lo.i, r.hi.i)
+    }
+
+    func caretRect(for p: UITextPosition) -> CGRect {
+        guard let p = p as? Position else { return caret }
+        var r = rect(p.i, p.i)
+        r.size.width = max(r.width, 2)
+        return r
+    }
+
+    func selectionRects(for range: UITextRange) -> [UITextSelectionRect] {
+        guard let r = range as? Range else { return [] }
+        var out: [SelectionRect] = []
+        var at = r.lo.i
+        while at < r.hi.i || out.isEmpty {
+            guard hasDocument, let b = Go.answer(Event.textBounds(id: id, start: at, end: r.hi.i), { TextBoundsReply(&$0) }), b.ok else { break }
+            out.append(SelectionRect(CGRect(x: b.x, y: b.y, width: b.width, height: b.height)))
+            if b.end <= at { break }
+            at = b.end
+        }
+        out.first?.starts = true
+        out.last?.ends = true
+        return out
+    }
+
+    func closestPosition(to point: CGPoint) -> UITextPosition? {
+        guard hasDocument, let r = Go.answer(Event.textIndexAt(id: id, x: Double(point.x), y: Double(point.y)), { TextIndexAtReply(&$0) }), r.ok else { return pos(selEnd) }
+        return pos(r.index)
+    }
+
+    func closestPosition(to point: CGPoint, within range: UITextRange) -> UITextPosition? {
+        guard let r = range as? Range, let p = closestPosition(to: point) as? Position else { return nil }
+        return pos(max(r.lo.i, min(p.i, r.hi.i)))
+    }
+
+    func characterRange(at point: CGPoint) -> UITextRange? {
+        guard let p = closestPosition(to: point) as? Position else { return nil }
+        return Range(p, pos(p.i + 1))
+    }
 
     // VoiceOver.
 
@@ -353,6 +439,18 @@ private final class Range: UITextRange {
     override var start: UITextPosition { lo }
     override var end: UITextPosition { hi }
     override var isEmpty: Bool { lo.i == hi.i }
+}
+
+/// A line of a selection, for the system's text interactions.
+private final class SelectionRect: UITextSelectionRect {
+    let box: CGRect
+    var starts = false, ends = false
+    init(_ box: CGRect) { self.box = box }
+    override var rect: CGRect { box }
+    override var writingDirection: NSWritingDirection { .natural }
+    override var containsStart: Bool { starts }
+    override var containsEnd: Bool { ends }
+    override var isVertical: Bool { false }
 }
 
 /// An element of native UI, as VoiceOver reads it.

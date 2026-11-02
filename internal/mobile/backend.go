@@ -96,12 +96,24 @@ func New() *Backend {
 	if theHost != nil {
 		b.t = newTransport(theHost)
 	}
+	early.Lock()
+	b.events = early.events
+	early.events = nil
 	current.Store(b)
+	early.Unlock()
 	return b
 }
 
 // current is the backend events go to.
 var current atomic.Pointer[Backend]
+
+// early holds the events the host sent before the app made its backend,
+// which takes them: a link the app was opened with is sent as it launches,
+// while its main function may yet be setting up.
+var early struct {
+	sync.Mutex
+	events []event
+}
 
 func goroutineID() uint64 {
 	var buf [64]byte
@@ -244,12 +256,25 @@ func (b *Backend) Wake() {
 // answer when the host waits for one. onUI tells whether the host sends
 // it from the UI thread, which then runs Go's calls while it waits.
 func deliver(msg []byte, onUI bool) []byte {
-	b := current.Load()
-	if b == nil || len(msg) == 0 {
+	if len(msg) == 0 {
 		return nil
 	}
 	op := (&wire.Reader{Buf: msg}).Uvarint()
 	msg = bytes.Clone(msg)
+	b := current.Load()
+	if b == nil {
+		early.Lock()
+		b = current.Load()
+		if b == nil {
+			// What waits has no one to answer it yet.
+			if !wire.EventWaits(op) {
+				early.events = append(early.events, event{msg: msg})
+			}
+			early.Unlock()
+			return nil
+		}
+		early.Unlock()
+	}
 	if !wire.EventWaits(op) {
 		b.mu.Lock()
 		b.events = append(b.events, event{msg: msg})

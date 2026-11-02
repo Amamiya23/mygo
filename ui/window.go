@@ -316,6 +316,18 @@ func (h *windowHost) event(ev platform.SurfaceEvent) bool {
 		h.requestFrame()
 		return false
 	}
+	if ev.Kind == platform.SurfaceLowMemory {
+		// What the next frame makes again: the renderer's textures, its
+		// atlases and pipelines among them.
+		if h.gpu != nil {
+			h.gpu.Release()
+			h.gpu = nil
+			h.gpuTried, h.retryAt = false, time.Time{}
+		}
+		h.rt.lowMemory()
+		h.requestFrame()
+		return false
+	}
 	if ev.Kind == platform.WebViewTabOut {
 		if i := slices.IndexFunc(h.placed, func(p platform.WebViewPlacement) bool { return p.WebView == ev.WebView }); i >= 0 {
 			h.rt.webViewTabOut(h.views[i], ev.Mods&platform.ModShift != 0)

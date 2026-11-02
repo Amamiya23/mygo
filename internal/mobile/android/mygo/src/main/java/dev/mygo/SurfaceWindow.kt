@@ -38,13 +38,11 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
         Go.send(Event.frame(wid))
     }
 
-    // The text being edited, as Go last told it (SetTextInput).
-    private var text = ""
-    private var selStart = 0
-    private var selEnd = 0
-    private var editing = false
-    private var secure = false
-    private var composing = ""
+    // The input being edited, as Go last told it (SetTextInput): the text
+    // around the selection, from base, and offsets in UTF-16 units of the
+    // document, as InputConnection counts.
+    private var input = SetTextInputCall(markStart = -1, markEnd = -1)
+    private val editing get() = input.active
 
     private var nodes: List<Node>? = null
 
@@ -76,33 +74,59 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
     private val density get() = HostImpl.density.toDouble()
 
     fun setTextInput(c: SetTextInputCall) {
-        val was = editing
-        editing = c.active
-        secure = c.secure
-        val changed = c.text != text || c.selStart.toInt() != selStart || c.selEnd.toInt() != selEnd
-        text = c.text
-        selStart = c.selStart.toInt().coerceIn(0, text.codePointCount(0, text.length))
-        selEnd = c.selEnd.toInt().coerceIn(0, text.codePointCount(0, text.length))
+        val was = input
+        input = c
         val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        if (editing && !was) {
-            surface.requestFocus()
-            imm.restartInput(surface)
-            imm.showSoftInput(surface, 0)
-        } else if (!editing && was) {
-            composing = ""
-            imm.hideSoftInputFromWindow(surface.windowToken, 0)
-            imm.restartInput(surface)
-        } else if (changed && editing && composing.isEmpty()) {
-            val a = utf16(selStart)
-            val b = utf16(selEnd)
-            imm.updateSelection(surface, a, b, -1, -1)
+        val traits = was.multiline != c.multiline || was.secure != c.secure || was.keyboard != c.keyboard || was.returnKey != c.returnKey ||
+            was.capitalize != c.capitalize || was.autocorrect != c.autocorrect || was.autofill != c.autofill
+        when {
+            c.active && (!was.active || traits) -> {
+                surface.requestFocus()
+                imm.restartInput(surface)
+                imm.showSoftInput(surface, 0)
+            }
+            !c.active && was.active -> {
+                imm.hideSoftInputFromWindow(surface.windowToken, 0)
+                imm.restartInput(surface)
+            }
+            c.active -> {
+                if (c.show != was.show) imm.showSoftInput(surface, 0)
+                if (c.selStart != was.selStart || c.selEnd != was.selEnd || c.markStart != was.markStart || c.markEnd != was.markEnd) {
+                    imm.updateSelection(surface, c.selStart.toInt(), c.selEnd.toInt(), c.markStart.toInt(), c.markEnd.toInt())
+                }
+            }
         }
     }
 
-    /** The UTF-16 offset of rune i of the text. */
-    private fun utf16(i: Int): Int = text.offsetByCodePoints(0, i.coerceIn(0, text.codePointCount(0, text.length)))
+    /** Sends an edit and takes the state after it, which the keyboard goes on to read at once. */
+    private fun edit(msg: ByteArray) {
+        val r = Go.ask(msg) ?: return
+        val st = TextStateReply(r)
+        val c = input
+        val changed = st.selStart != c.selStart || st.selEnd != c.selEnd || st.markStart != c.markStart || st.markEnd != c.markEnd
+        c.text = st.text
+        c.base = st.base
+        c.length = st.length
+        c.selStart = st.selStart
+        c.selEnd = st.selEnd
+        c.markStart = st.markStart
+        c.markEnd = st.markEnd
+        if (changed) {
+            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.updateSelection(surface, c.selStart.toInt(), c.selEnd.toInt(), c.markStart.toInt(), c.markEnd.toInt())
+        }
+    }
 
-    fun textInputChanged() {}
+    /** The part of the document from a to b, the host's copy holding it or not. */
+    private fun document(a: Int, b: Int): CharSequence {
+        val c = input
+        val lo = a - c.base.toInt()
+        val hi = b - c.base.toInt()
+        if (lo >= 0 && hi <= c.text.length && lo <= hi) return c.text.substring(lo, hi)
+        val r = Go.ask(Event.textRange(wid, a.toLong(), b.toLong())) ?: return ""
+        return TextRangeReply(r).text
+    }
+
     fun setCursor(cursor: String) {}
     fun showMenu(c: ShowMenuCall) {}
 
@@ -182,7 +206,7 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
             val handled = KeyReply(r).handled
             // Keys typing text type it, which the content takes as text.
             if (!handled && down && editing && text.isNotEmpty() && keyNames[code] == null) {
-                Go.send(Event.textInsert(wid, text))
+                edit(Event.textReplace(wid, false, 0, 0, text))
                 return true
             }
             return handled
@@ -195,88 +219,197 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
 
         override fun onCreateInputConnection(info: EditorInfo): InputConnection? {
             if (!editing) return null
-            info.inputType = if (secure) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
-            info.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_ACTION_DONE
-            info.initialSelStart = utf16(selStart)
-            info.initialSelEnd = utf16(selEnd)
+            val c = input
+            info.inputType = inputType(c)
+            info.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or when (c.returnKey) {
+                "go" -> EditorInfo.IME_ACTION_GO
+                "next" -> EditorInfo.IME_ACTION_NEXT
+                "search" -> EditorInfo.IME_ACTION_SEARCH
+                "send" -> EditorInfo.IME_ACTION_SEND
+                "done" -> EditorInfo.IME_ACTION_DONE
+                else -> if (c.multiline) EditorInfo.IME_ACTION_NONE else EditorInfo.IME_ACTION_DONE
+            }
+            if (c.multiline && c.returnKey.isEmpty()) info.imeOptions = info.imeOptions or EditorInfo.IME_FLAG_NO_ENTER_ACTION
+            info.initialSelStart = c.selStart.toInt()
+            info.initialSelEnd = c.selEnd.toInt()
+            info.packageName = context.packageName
             return Connection(this)
         }
 
         override fun getAccessibilityNodeProvider(): AccessibilityNodeProvider = Provider()
     }
 
+    /** The inputType of EditorInfo for an input's traits. */
+    private fun inputType(c: SetTextInputCall): Int {
+        var t = when (c.keyboard) {
+            "number" -> InputType.TYPE_CLASS_NUMBER
+            "decimal" -> InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
+            "phone" -> InputType.TYPE_CLASS_PHONE
+            "email" -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            "url" -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            else -> InputType.TYPE_CLASS_TEXT
+        }
+        if (c.secure) {
+            t = if (t and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_NUMBER) {
+                InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            } else {
+                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            return t
+        }
+        if (t and InputType.TYPE_MASK_CLASS != InputType.TYPE_CLASS_TEXT) return t
+        if (c.multiline) t = t or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        val plain = c.keyboard.isEmpty() || c.keyboard == "search"
+        t = t or when (c.capitalize) {
+            "characters" -> InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+            "words" -> InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            "sentences" -> InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            "none" -> 0
+            else -> if (plain) InputType.TYPE_TEXT_FLAG_CAP_SENTENCES else 0
+        }
+        t = t or when (c.autocorrect) {
+            "off" -> InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            "on" -> InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
+            else -> if (plain) InputType.TYPE_TEXT_FLAG_AUTO_CORRECT else 0
+        }
+        return t
+    }
+
     /** The soft keyboard's edits, to Go. */
     private inner class Connection(v: View) : BaseInputConnection(v, false) {
         override fun commitText(t: CharSequence, newCursorPosition: Int): Boolean {
-            composing = ""
-            Go.send(Event.textInsert(wid, t.toString()))
+            edit(Event.textReplace(wid, false, 0, 0, t.toString()))
+            placeCursor(t.length, newCursorPosition)
+            return true
+        }
+
+        override fun commitCompletion(c: android.view.inputmethod.CompletionInfo): Boolean {
+            c.text?.let { edit(Event.textReplace(wid, false, 0, 0, it.toString())) }
+            return true
+        }
+
+        override fun commitCorrection(c: android.view.inputmethod.CorrectionInfo): Boolean {
+            val at = c.offset.toLong()
+            edit(Event.textReplace(wid, true, at, at + c.oldText.length, c.newText.toString()))
             return true
         }
 
         override fun setComposingText(t: CharSequence, newCursorPosition: Int): Boolean {
-            composing = t.toString()
-            val n = composing.codePointCount(0, composing.length).toLong()
-            Go.send(Event.textMarked(wid, composing, n, n))
+            // The selection in the text composed, from the cursor Android
+            // places relative to it: past it, the common case, or before.
+            val n = t.length.toLong()
+            val at = if (newCursorPosition > 0) n else 0L
+            edit(Event.textMark(wid, false, 0, 0, t.toString(), at, at))
+            return true
+        }
+
+        override fun setComposingRegion(start: Int, end: Int): Boolean {
+            val a = minOf(start, end).coerceAtLeast(0)
+            val b = maxOf(start, end).coerceAtMost(input.length.toInt())
+            val text = document(a, b).toString()
+            val n = text.length.toLong()
+            edit(Event.textMark(wid, true, a.toLong(), b.toLong(), text, n, n))
             return true
         }
 
         override fun finishComposingText(): Boolean {
-            if (composing.isNotEmpty()) {
-                val c = composing
-                composing = ""
-                Go.send(Event.textInsert(wid, c))
-            }
+            edit(Event.textUnmark(wid))
             return true
         }
 
         override fun deleteSurroundingText(before: Int, after: Int): Boolean {
-            Go.send(Event.textDelete(wid, before.toLong(), after.toLong()))
+            edit(Event.textDelete(wid, before.toLong(), after.toLong()))
             return true
+        }
+
+        override fun deleteSurroundingTextInCodePoints(before: Int, after: Int): Boolean {
+            // Units of the text around the selection.
+            val a = minOf(input.selStart, input.selEnd).toInt()
+            val b = maxOf(input.selStart, input.selEnd).toInt()
+            val head = document(maxOf(0, a - 2 * before), a).toString()
+            val tail = document(b, minOf(input.length.toInt(), b + 2 * after)).toString()
+            val units = head.length - head.offsetByCodePoints(head.length, -minOf(before, head.codePointCount(0, head.length)))
+            val unitsAfter = tail.offsetByCodePoints(0, minOf(after, tail.codePointCount(0, tail.length)))
+            edit(Event.textDelete(wid, units.toLong(), unitsAfter.toLong()))
+            return true
+        }
+
+        override fun setSelection(start: Int, end: Int): Boolean {
+            edit(Event.textSelect(wid, start.toLong(), end.toLong()))
+            return true
+        }
+
+        private fun placeCursor(committed: Int, newCursorPosition: Int) {
+            // Past the text, as nearly all input methods ask, is where the
+            // insertion leaves it.
+            if (newCursorPosition == 1) return
+            val end = input.selEnd.toInt()
+            val at = if (newCursorPosition > 0) end + newCursorPosition - 1 else end - committed + newCursorPosition
+            val p = at.coerceIn(0, input.length.toInt()).toLong()
+            edit(Event.textSelect(wid, p, p))
         }
 
         override fun sendKeyEvent(e: KeyEvent): Boolean {
             if (e.action == KeyEvent.ACTION_DOWN) when (e.keyCode) {
-                KeyEvent.KEYCODE_DEL -> Go.send(Event.textDelete(wid, 1, 0))
-                KeyEvent.KEYCODE_FORWARD_DEL -> Go.send(Event.textDelete(wid, 0, 1))
-                KeyEvent.KEYCODE_ENTER -> Go.send(Event.textCommand(wid, "newline"))
-                else -> if (e.unicodeChar > 0) Go.send(Event.textInsert(wid, String(Character.toChars(e.unicodeChar))))
+                KeyEvent.KEYCODE_DEL -> edit(Event.textCommand(wid, "deleteBackward"))
+                KeyEvent.KEYCODE_FORWARD_DEL -> edit(Event.textCommand(wid, "deleteForward"))
+                KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> edit(Event.textCommand(wid, "newline"))
+                KeyEvent.KEYCODE_TAB -> edit(Event.textCommand(wid, "tab"))
+                KeyEvent.KEYCODE_DPAD_LEFT -> edit(Event.textCommand(wid, "left"))
+                KeyEvent.KEYCODE_DPAD_RIGHT -> edit(Event.textCommand(wid, "right"))
+                KeyEvent.KEYCODE_DPAD_UP -> edit(Event.textCommand(wid, "up"))
+                KeyEvent.KEYCODE_DPAD_DOWN -> edit(Event.textCommand(wid, "down"))
+                else -> if (e.unicodeChar > 0) edit(Event.textReplace(wid, false, 0, 0, String(Character.toChars(e.unicodeChar))))
             }
             return true
         }
 
         override fun performEditorAction(action: Int): Boolean {
-            Go.send(Event.textCommand(wid, "newline"))
+            edit(Event.textCommand(wid, "newline"))
             return true
         }
 
         override fun performContextMenuAction(action: Int): Boolean {
             when (action) {
-                android.R.id.selectAll -> Go.send(Event.textCommand(wid, "selectAll"))
-                android.R.id.cut -> Go.send(Event.textCommand(wid, "cut"))
-                android.R.id.copy -> Go.send(Event.textCommand(wid, "copy"))
-                android.R.id.paste -> Go.send(Event.textCommand(wid, "paste"))
+                android.R.id.selectAll -> edit(Event.textCommand(wid, "selectAll"))
+                android.R.id.cut -> edit(Event.textCommand(wid, "cut"))
+                android.R.id.copy -> edit(Event.textCommand(wid, "copy"))
+                android.R.id.paste -> edit(Event.textCommand(wid, "paste"))
+                else -> return false
             }
             return true
         }
 
         override fun getTextBeforeCursor(n: Int, flags: Int): CharSequence {
-            val a = utf16(minOf(selStart, selEnd))
-            return text.substring(maxOf(0, a - n), a)
+            val a = minOf(input.selStart, input.selEnd).toInt()
+            return document(maxOf(0, a - n), a)
         }
 
         override fun getTextAfterCursor(n: Int, flags: Int): CharSequence {
-            val b = utf16(maxOf(selStart, selEnd))
-            return text.substring(b, minOf(text.length, b + n))
+            val b = maxOf(input.selStart, input.selEnd).toInt()
+            return document(b, minOf(input.length.toInt(), b + n))
         }
 
         override fun getSelectedText(flags: Int): CharSequence? {
-            val a = utf16(minOf(selStart, selEnd))
-            val b = utf16(maxOf(selStart, selEnd))
-            return if (a == b) null else text.substring(a, b)
+            val a = minOf(input.selStart, input.selEnd).toInt()
+            val b = maxOf(input.selStart, input.selEnd).toInt()
+            return if (a == b) null else document(a, b)
         }
 
-        override fun getCursorCapsMode(reqModes: Int) = 0
+        override fun getExtractedText(req: android.view.inputmethod.ExtractedTextRequest?, flags: Int): android.view.inputmethod.ExtractedText {
+            val c = input
+            return android.view.inputmethod.ExtractedText().apply {
+                text = c.text
+                startOffset = c.base.toInt()
+                selectionStart = c.selStart.toInt() - c.base.toInt()
+                selectionEnd = c.selEnd.toInt() - c.base.toInt()
+            }
+        }
+
+        override fun getCursorCapsMode(reqModes: Int): Int {
+            val a = minOf(input.selStart, input.selEnd).toInt()
+            return android.text.TextUtils.getCapsMode(document(maxOf(0, a - 64), a).toString(), minOf(a, 64), reqModes)
+        }
     }
 
     /** TalkBack's view of the elements of native UI, as virtual views. */

@@ -57,16 +57,15 @@ const (
 	CallHaptic                 = 51
 	CallRequestFrame           = 52
 	CallSetTextInput           = 53
-	CallTextInputChanged       = 54
-	CallSetCursor              = 55
-	CallAccessibilityChanged   = 56
-	CallAnnounce               = 57
-	CallShowMenu               = 58
-	CallTextMetrics            = 59
-	CallMeasureText            = 60
-	CallTextAdvances           = 61
-	CallDrawText               = 62
-	CallRegisterFont           = 63
+	CallSetCursor              = 54
+	CallAccessibilityChanged   = 55
+	CallAnnounce               = 56
+	CallShowMenu               = 57
+	CallTextMetrics            = 58
+	CallMeasureText            = 59
+	CallTextAdvances           = 60
+	CallDrawText               = 61
+	CallRegisterFont           = 62
 )
 
 // Numbers of events.
@@ -108,16 +107,20 @@ const (
 	EventTouch               = 35
 	EventScroll              = 36
 	EventKey                 = 37
-	EventTextInsert          = 38
-	EventTextMarked          = 39
-	EventTextDelete          = 40
-	EventTextCommand         = 41
-	EventTextState           = 42
-	EventTextSelect          = 43
-	EventTextInputEnded      = 44
-	EventMenuChosen          = 45
-	EventAccessibilityTree   = 46
-	EventAccessibilityAction = 47
+	EventTextReplace         = 38
+	EventTextMark            = 39
+	EventTextUnmark          = 40
+	EventTextDelete          = 41
+	EventTextSelect          = 42
+	EventTextCommand         = 43
+	EventTextState           = 44
+	EventTextRange           = 45
+	EventTextBounds          = 46
+	EventTextIndexAt         = 47
+	EventTextInputEnded      = 48
+	EventMenuChosen          = 49
+	EventAccessibilityTree   = 50
+	EventAccessibilityAction = 51
 )
 
 // AppInfo is the app's bundle and the system's settings, asked once at start.
@@ -1008,51 +1011,60 @@ func (m *RequestFrame) Encode(w *Writer) {
 // Wait reports whether the caller waits for the host to run it.
 func (*RequestFrame) Wait() bool { return false }
 
-// SetTextInput is where the caret of the text being edited is, and whether the keyboard shows for it.
+// SetTextInput is whether the keyboard shows and what for: the input's traits (platform.TextTraits), and its text. Show counts the requests to show the keyboard again. Offsets are UTF-16 units of the document, of which Text is the part around the selection, from Base; MarkStart is -1 without marked text. A window without Document takes text without one, as a terminal: the keyboard sees none.
 type SetTextInput struct {
-	ID       int
-	Active   bool
-	X        float64
-	Y        float64
-	Width    float64
-	Height   float64
-	Kind     string
-	Secure   bool
-	Text     string
-	SelStart int
-	SelEnd   int
+	ID          int
+	Active      bool
+	Show        int
+	X           float64
+	Y           float64
+	Width       float64
+	Height      float64
+	Document    bool
+	Multiline   bool
+	Secure      bool
+	Keyboard    string
+	ReturnKey   string
+	Capitalize  string
+	Autocorrect string
+	Autofill    string
+	Text        string
+	Base        int
+	Length      int
+	SelStart    int
+	SelEnd      int
+	MarkStart   int
+	MarkEnd     int
 }
 
 func (m *SetTextInput) Encode(w *Writer) {
 	w.Uvarint(CallSetTextInput)
 	w.Int(m.ID)
 	w.Bool(m.Active)
+	w.Int(m.Show)
 	w.Float(m.X)
 	w.Float(m.Y)
 	w.Float(m.Width)
 	w.Float(m.Height)
-	w.String(m.Kind)
+	w.Bool(m.Document)
+	w.Bool(m.Multiline)
 	w.Bool(m.Secure)
+	w.String(m.Keyboard)
+	w.String(m.ReturnKey)
+	w.String(m.Capitalize)
+	w.String(m.Autocorrect)
+	w.String(m.Autofill)
 	w.String(m.Text)
+	w.Int(m.Base)
+	w.Int(m.Length)
 	w.Int(m.SelStart)
 	w.Int(m.SelEnd)
+	w.Int(m.MarkStart)
+	w.Int(m.MarkEnd)
 }
 
 // Wait reports whether the caller waits for the host to run it.
 func (*SetTextInput) Wait() bool { return false }
-
-// TextInputChanged is the text around the caret changed, which the keyboard's suggestions read again.
-type TextInputChanged struct {
-	ID int
-}
-
-func (m *TextInputChanged) Encode(w *Writer) {
-	w.Uvarint(CallTextInputChanged)
-	w.Int(m.ID)
-}
-
-// Wait reports whether the caller waits for the host to run it.
-func (*TextInputChanged) Wait() bool { return false }
 
 // SetCursor is the pointer's shape, for a mouse or a trackpad.
 type SetCursor struct {
@@ -1302,13 +1314,19 @@ func (m *ActiveEvent) Decode(r *Reader) {
 	m.Active = r.Bool()
 }
 
-// BackgroundEvent is the app went to the background (true) or came back.
+// BackgroundEvent is the app goes to the background (true) or came back. The host waits: iOS ends apps that use the GPU in the background, so that frames stop before it returns.
 type BackgroundEvent struct {
 	Background bool
 }
 
 func (m *BackgroundEvent) Decode(r *Reader) {
 	m.Background = r.Bool()
+}
+
+type BackgroundReply struct {
+}
+
+func (m *BackgroundReply) Encode(w *Writer) {
 }
 
 type ThemeChangedEvent struct {
@@ -1771,33 +1789,72 @@ func (m *KeyReply) Encode(w *Writer) {
 	w.Bool(m.Handled)
 }
 
-// TextInsertEvent is the keyboard typed Text, in place of the marked text if any.
-type TextInsertEvent struct {
-	ID   int
-	Text string
+// TextReplaceEvent is the keyboard put Text in Start to End of the document, or with no range in place of the marked text or the selection; answers TextStateReply.
+type TextReplaceEvent struct {
+	ID       int
+	HasRange bool
+	Start    int
+	End      int
+	Text     string
 }
 
-func (m *TextInsertEvent) Decode(r *Reader) {
+func (m *TextReplaceEvent) Decode(r *Reader) {
 	m.ID = r.Int()
+	m.HasRange = r.Bool()
+	m.Start = r.Int()
+	m.End = r.Int()
 	m.Text = r.String()
 }
 
-// TextMarkedEvent is the input method's text being composed, its selection in runes.
-type TextMarkedEvent struct {
+type TextReplaceReply struct {
+}
+
+func (m *TextReplaceReply) Encode(w *Writer) {
+}
+
+// TextMarkEvent is the input method composes Text over Start to End, or with no range over the marked text or the selection; SelStart and SelEnd are in Text; answers TextStateReply.
+type TextMarkEvent struct {
 	ID       int
+	HasRange bool
+	Start    int
+	End      int
 	Text     string
 	SelStart int
 	SelEnd   int
 }
 
-func (m *TextMarkedEvent) Decode(r *Reader) {
+func (m *TextMarkEvent) Decode(r *Reader) {
 	m.ID = r.Int()
+	m.HasRange = r.Bool()
+	m.Start = r.Int()
+	m.End = r.Int()
 	m.Text = r.String()
 	m.SelStart = r.Int()
 	m.SelEnd = r.Int()
 }
 
-// TextDeleteEvent is the keyboard deleted Before runes before the caret and After after it.
+type TextMarkReply struct {
+}
+
+func (m *TextMarkReply) Encode(w *Writer) {
+}
+
+// TextUnmarkEvent is the marked text stays as text; answers TextStateReply.
+type TextUnmarkEvent struct {
+	ID int
+}
+
+func (m *TextUnmarkEvent) Decode(r *Reader) {
+	m.ID = r.Int()
+}
+
+type TextUnmarkReply struct {
+}
+
+func (m *TextUnmarkReply) Encode(w *Writer) {
+}
+
+// TextDeleteEvent is the keyboard deleted Before units before the selection and After after it; answers TextStateReply.
 type TextDeleteEvent struct {
 	ID     int
 	Before int
@@ -1810,47 +1867,13 @@ func (m *TextDeleteEvent) Decode(r *Reader) {
 	m.After = r.Int()
 }
 
-// TextCommandEvent is an editing action of the keyboard or the edit menu: "newline", "tab", "cut", "copy", "paste", "selectAll", "left", ….
-type TextCommandEvent struct {
-	ID      int
-	Command string
+type TextDeleteReply struct {
 }
 
-func (m *TextCommandEvent) Decode(r *Reader) {
-	m.ID = r.Int()
-	m.Command = r.String()
+func (m *TextDeleteReply) Encode(w *Writer) {
 }
 
-// TextStateEvent is the text around the caret and the selection, in runes, for the keyboard's suggestions.
-type TextStateEvent struct {
-	ID int
-}
-
-func (m *TextStateEvent) Decode(r *Reader) {
-	m.ID = r.Int()
-}
-
-type TextStateReply struct {
-	Before      string
-	Selected    string
-	After       string
-	Marked      int
-	CaretX      float64
-	CaretY      float64
-	CaretHeight float64
-}
-
-func (m *TextStateReply) Encode(w *Writer) {
-	w.String(m.Before)
-	w.String(m.Selected)
-	w.String(m.After)
-	w.Int(m.Marked)
-	w.Float(m.CaretX)
-	w.Float(m.CaretY)
-	w.Float(m.CaretHeight)
-}
-
-// TextSelectEvent is the keyboard moved the caret or the selection, by runes from the caret.
+// TextSelectEvent is the keyboard moved the selection; answers TextStateReply.
 type TextSelectEvent struct {
 	ID    int
 	Start int
@@ -1861,6 +1884,145 @@ func (m *TextSelectEvent) Decode(r *Reader) {
 	m.ID = r.Int()
 	m.Start = r.Int()
 	m.End = r.Int()
+}
+
+type TextSelectReply struct {
+}
+
+func (m *TextSelectReply) Encode(w *Writer) {
+}
+
+// TextCommandEvent is an editing action of the keyboard or the edit menu: "newline", "tab", "deleteBackward", "deleteForward", "cut", "copy", "paste", "selectAll", "left", …; answers TextStateReply.
+type TextCommandEvent struct {
+	ID      int
+	Command string
+}
+
+func (m *TextCommandEvent) Decode(r *Reader) {
+	m.ID = r.Int()
+	m.Command = r.String()
+}
+
+type TextCommandReply struct {
+}
+
+func (m *TextCommandReply) Encode(w *Writer) {
+}
+
+// TextStateEvent is the text around the selection, and the selection.
+type TextStateEvent struct {
+	ID int
+}
+
+func (m *TextStateEvent) Decode(r *Reader) {
+	m.ID = r.Int()
+}
+
+type TextStateReply struct {
+	Text      string
+	Base      int
+	Length    int
+	SelStart  int
+	SelEnd    int
+	MarkStart int
+	MarkEnd   int
+	X         float64
+	Y         float64
+	Width     float64
+	Height    float64
+}
+
+func (m *TextStateReply) Encode(w *Writer) {
+	w.String(m.Text)
+	w.Int(m.Base)
+	w.Int(m.Length)
+	w.Int(m.SelStart)
+	w.Int(m.SelEnd)
+	w.Int(m.MarkStart)
+	w.Int(m.MarkEnd)
+	w.Float(m.X)
+	w.Float(m.Y)
+	w.Float(m.Width)
+	w.Float(m.Height)
+}
+
+// TextRangeEvent is a part of the document outside the text the host has.
+type TextRangeEvent struct {
+	ID    int
+	Start int
+	End   int
+}
+
+func (m *TextRangeEvent) Decode(r *Reader) {
+	m.ID = r.Int()
+	m.Start = r.Int()
+	m.End = r.Int()
+}
+
+type TextRangeReply struct {
+	Text  string
+	Start int
+	End   int
+}
+
+func (m *TextRangeReply) Encode(w *Writer) {
+	w.String(m.Text)
+	w.Int(m.Start)
+	w.Int(m.End)
+}
+
+// TextBoundsEvent is where the range is on screen: its first line's rectangle.
+type TextBoundsEvent struct {
+	ID    int
+	Start int
+	End   int
+}
+
+func (m *TextBoundsEvent) Decode(r *Reader) {
+	m.ID = r.Int()
+	m.Start = r.Int()
+	m.End = r.Int()
+}
+
+type TextBoundsReply struct {
+	OK     bool
+	X      float64
+	Y      float64
+	Width  float64
+	Height float64
+	End    int
+}
+
+func (m *TextBoundsReply) Encode(w *Writer) {
+	w.Bool(m.OK)
+	w.Float(m.X)
+	w.Float(m.Y)
+	w.Float(m.Width)
+	w.Float(m.Height)
+	w.Int(m.End)
+}
+
+// TextIndexAtEvent is the offset nearest a point of the window.
+type TextIndexAtEvent struct {
+	ID int
+	X  float64
+	Y  float64
+}
+
+func (m *TextIndexAtEvent) Decode(r *Reader) {
+	m.ID = r.Int()
+	m.X = r.Float()
+	m.Y = r.Float()
+}
+
+type TextIndexAtReply struct {
+	OK    bool
+	Index int
+}
+
+func (m *TextIndexAtReply) Encode(w *Writer) {
+	w.Bool(m.OK)
+	w.Int(m.Index)
 }
 
 // TextInputEndedEvent is the keyboard went away.
@@ -1925,7 +2087,7 @@ func (m *AccessibilityActionReply) Encode(w *Writer) {
 // EventWaits reports whether the host waits for the reply of event op.
 func EventWaits(op uint64) bool {
 	switch op {
-	case EventBackPressed, EventWillNavigate, EventNewWindow, EventPermissionRequested, EventSurfaceDestroyed, EventKey, EventTextState, EventAccessibilityTree, EventAccessibilityAction:
+	case EventBackground, EventBackPressed, EventWillNavigate, EventNewWindow, EventPermissionRequested, EventSurfaceDestroyed, EventKey, EventTextReplace, EventTextMark, EventTextUnmark, EventTextDelete, EventTextSelect, EventTextCommand, EventTextState, EventTextRange, EventTextBounds, EventTextIndexAt, EventAccessibilityTree, EventAccessibilityAction:
 		return true
 	}
 	return false

@@ -406,6 +406,9 @@ type engine struct {
 	ime struct {
 		state platform.TextInputState
 		base  int
+		// show counts the fingers that pressed the input with the focus,
+		// each of which asks for the on-screen keyboard.
+		show uint32
 	}
 	// drag is the value being dragged within the window.
 	drag        *valueDrag

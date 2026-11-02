@@ -526,7 +526,6 @@ object HostImpl : HostCalls {
 
     override fun requestFrame(c: RequestFrameCall) { surface(c.id)?.requestFrame() }
     override fun setTextInput(c: SetTextInputCall) { surface(c.id)?.setTextInput(c) }
-    override fun textInputChanged(c: TextInputChangedCall) { surface(c.id)?.textInputChanged() }
     override fun setCursor(c: SetCursorCall) { surface(c.id)?.setCursor(c.cursor) }
     override fun accessibilityChanged(c: AccessibilityChangedCall) { surface(c.id)?.accessibilityChanged(c.focus) }
     override fun announce(c: AnnounceCall) { (front()?.view ?: root).announceForAccessibility(c.text) }

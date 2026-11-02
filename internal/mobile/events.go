@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"runtime"
+	"runtime/debug"
 
 	"github.com/egoist/mygo/internal/mobile/wire"
 	"github.com/egoist/mygo/internal/platform"
@@ -39,6 +41,11 @@ func (b *Backend) handle(msg []byte) []byte {
 			// Coming back is the app opened again, as clicking its Dock
 			// icon is on macOS; launching is not.
 			b.background = false
+			for _, w := range b.windows {
+				if w.s != nil {
+					w.s.foreground()
+				}
+			}
 			b.h.PowerEvent("resume")
 			if b.ready {
 				b.h.Activated(b.front() != nil)
@@ -75,11 +82,14 @@ func (b *Backend) handle(msg []byte) []byte {
 			b.h.OpenFiles(files)
 		}
 	case wire.EventMemoryWarning:
+		b.h.MemoryWarning()
 		for _, w := range b.windows {
 			if w.s != nil {
-				w.s.idle()
+				w.s.lowMemory()
 			}
 		}
+		runtime.GC()
+		debug.FreeOSMemory()
 	case wire.EventTerminating:
 		b.h.Terminating()
 

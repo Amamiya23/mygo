@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/egoist/mygo/internal/platform"
 	"fmt"
 	"hash/maphash"
 	"reflect"
@@ -764,6 +765,9 @@ type state struct {
 	caret       Rect
 	takesText   bool
 	noIME       bool
+	// traits describe the element's text to on-screen keyboards, as this
+	// frame set them.
+	traits platform.TextTraits
 	// copyData is what a Selectable container's selection copies as
 	// (CopyData).
 	copyData func(parts []SelectedText) transfer.Data

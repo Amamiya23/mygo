@@ -62,6 +62,7 @@ type Application struct {
 	onBeforeQuit      listeners[func(*QuitEvent)]
 	onWillQuit        listeners[func(*QuitEvent)]
 	onQuit            listeners[func()]
+	onMemoryWarning   listeners[func()]
 	onActivate        listeners[func(bool)]
 	onDidBecomeActive listeners[func()]
 	onDidResignActive listeners[func()]
@@ -491,6 +492,14 @@ func (a *Application) OnWillQuit(fn func(e *QuitEvent)) (off func()) {
 // OnQuit is called after the event loop has stopped.
 func (a *Application) OnQuit(fn func()) (off func()) { return a.onQuit.add(fn, false) }
 
+// OnMemoryWarning is called on the main thread when the system is short of
+// memory: let go of what can be made again, as caches. Phones end apps that
+// keep too much; desktops do not report it. Native UI drops its own caches
+// after these listeners ran, and the garbage collector returns what it can.
+func (a *Application) OnMemoryWarning(fn func()) (off func()) {
+	return a.onMemoryWarning.add(fn, false)
+}
+
 // OnActivate is called when the application is re-activated, for example by
 // clicking its Dock icon (macOS). Apps usually open a window when
 // hasVisibleWindows is false.
@@ -665,6 +674,7 @@ func (appHandler) ThemeChanged() {
 	// media queries do not tell them.
 	sendPreferences()
 }
+func (appHandler) MemoryWarning()                { fire(&App.onMemoryWarning) }
 func (appHandler) DisplaysChanged()              { Screen.changed() }
 func (appHandler) LocaleChanged()                { App.localeChangedFromSystem() }
 func (appHandler) PowerEvent(event string)       { Power.event(event) }

@@ -3,6 +3,8 @@ package ui
 import (
 	"slices"
 
+	"github.com/egoist/mygo/internal/platform"
+
 	transfer "github.com/egoist/mygo/transfer"
 )
 
@@ -33,6 +35,7 @@ func textInputBase(c *context, value *string, multiline bool) *node {
 		e.flags |= flagScrollY
 	}
 	st := e.st
+	st.traits = platform.TextTraits{}
 	if st.editor == nil || st.editor.document != nil {
 		st.editor = newEditor(c.rt.now)
 		st.editor.setText(*value)
@@ -281,6 +284,115 @@ func (e *node) Composing() bool {
 func (e *node) Password() *node {
 	if ed := e.st.editor; ed != nil && !ed.multiline {
 		ed.password = true
+	}
+	return e
+}
+
+// KeyboardType is the layout of the on-screen keyboard for a text input.
+type KeyboardType string
+
+// The keyboards of phones and tablets. Hardware keyboards and desktops
+// type as they do.
+const (
+	KeyboardDefault KeyboardType = ""
+	KeyboardEmail   KeyboardType = "email"
+	KeyboardNumber  KeyboardType = "number"
+	KeyboardDecimal KeyboardType = "decimal"
+	KeyboardPhone   KeyboardType = "phone"
+	KeyboardURL     KeyboardType = "url"
+	KeyboardSearch  KeyboardType = "search"
+)
+
+// ReturnKeyType is what the return key of an on-screen keyboard says.
+type ReturnKeyType string
+
+// The return keys of phones and tablets.
+const (
+	ReturnDefault ReturnKeyType = ""
+	ReturnDone    ReturnKeyType = "done"
+	ReturnGo      ReturnKeyType = "go"
+	// ReturnNext moves the focus to the next element after it submits.
+	ReturnNext   ReturnKeyType = "next"
+	ReturnSearch ReturnKeyType = "search"
+	ReturnSend   ReturnKeyType = "send"
+)
+
+// Capitalization is what an on-screen keyboard capitalizes as one types.
+type Capitalization string
+
+// The capitalizations of on-screen keyboards.
+const (
+	CapitalizeDefault    Capitalization = ""
+	CapitalizeNone       Capitalization = "none"
+	CapitalizeWords      Capitalization = "words"
+	CapitalizeSentences  Capitalization = "sentences"
+	CapitalizeCharacters Capitalization = "characters"
+)
+
+// AutofillKind names what a text input holds, for the system to offer it
+// from its passwords and contacts.
+type AutofillKind string
+
+// The kinds of text the system fills in.
+const (
+	AutofillNone        AutofillKind = ""
+	AutofillUsername    AutofillKind = "username"
+	AutofillPassword    AutofillKind = "password"
+	AutofillNewPassword AutofillKind = "newPassword"
+	AutofillOneTimeCode AutofillKind = "oneTimeCode"
+	AutofillEmail       AutofillKind = "email"
+	AutofillName        AutofillKind = "name"
+	AutofillPhone       AutofillKind = "phone"
+	AutofillAddress     AutofillKind = "address"
+	AutofillPostalCode  AutofillKind = "postalCode"
+	AutofillCreditCard  AutofillKind = "creditCard"
+)
+
+// Keyboard chooses the on-screen keyboard's layout for a text input, on
+// phones and tablets.
+func (e *node) Keyboard(k KeyboardType) *node {
+	if e.hasState() {
+		e.st.traits.Keyboard = string(k)
+	}
+	return e
+}
+
+// ReturnKey sets what the return key of an on-screen keyboard says, for a
+// single-line input. It submits the input as Enter does; ReturnNext moves
+// the focus on as well.
+func (e *node) ReturnKey(k ReturnKeyType) *node {
+	if e.hasState() {
+		e.st.traits.ReturnKey = string(k)
+	}
+	return e
+}
+
+// Capitalize sets what an on-screen keyboard capitalizes as one types.
+func (e *node) Capitalize(c Capitalization) *node {
+	if e.hasState() {
+		e.st.traits.Capitalize = string(c)
+	}
+	return e
+}
+
+// Autocorrect turns an on-screen keyboard's corrections and suggestions on
+// or off for a text input, on by default where the keyboard has them.
+func (e *node) Autocorrect(on bool) *node {
+	if e.hasState() {
+		e.st.traits.Autocorrect = "off"
+		if on {
+			e.st.traits.Autocorrect = "on"
+		}
+	}
+	return e
+}
+
+// Autofill tells the system what a text input holds, for it to offer it
+// from its passwords and contacts, as with iOS's Passwords above the
+// keyboard.
+func (e *node) Autofill(k AutofillKind) *node {
+	if e.hasState() {
+		e.st.traits.Autofill = string(k)
 	}
 	return e
 }

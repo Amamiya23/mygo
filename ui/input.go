@@ -346,6 +346,9 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 		newFocus := uint64(0)
 		if focus != nil {
 			newFocus = focus.id
+			if rt.touch.down && focus.textClient != nil {
+				rt.ime.show++
+			}
 		}
 		if newFocus != rt.focused {
 			rt.focused = newFocus
@@ -1185,6 +1188,15 @@ func (rt *engine) updateTextInput() {
 		t.Active, t.NoInputMethod = true, s.noIME
 		r := transformRect(s.world, Rect{s.x + s.caret.X, s.y + s.caret.Y, s.caret.W, s.caret.H})
 		t.Caret = rt.toWindow(platform.RectF{X: float64(r.X), Y: float64(r.Y), W: float64(r.W), H: float64(r.H)})
+	}
+	if t.Active {
+		if s := rt.states[rt.focused]; s != nil {
+			t.Traits = s.traits
+			if s.editor != nil {
+				t.Traits.Multiline, t.Traits.Secure = s.editor.multiline, s.editor.password
+			}
+		}
+		t.ShowKeyboard = rt.ime.show
 	}
 	if t != rt.ime.state {
 		if t.Client != rt.ime.state.Client {

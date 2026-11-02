@@ -116,8 +116,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) { Go.send(Event.active(active: true)) }
     func sceneWillResignActive(_ scene: UIScene) { Go.send(Event.active(active: false)) }
-    func sceneDidEnterBackground(_ scene: UIScene) { Go.send(Event.background(background: true)) }
-    func sceneWillEnterForeground(_ scene: UIScene) { Go.send(Event.background(background: false)) }
+    // Waits for Go: it must stop drawing before the app is in the background,
+    // where iOS ends apps that use the GPU.
+    func sceneDidEnterBackground(_ scene: UIScene) { Go.ask(Event.background(background: true)) }
+    func sceneWillEnterForeground(_ scene: UIScene) { Go.ask(Event.background(background: false)) }
 }
 
 /// The view controller of the app's window, whose view holds the app's

@@ -698,36 +698,50 @@ public struct RequestFrameCall {
 public struct SetTextInputCall {
     public var id: Int = 0
     public var active: Bool = false
+    public var show: Int = 0
     public var x: Double = 0
     public var y: Double = 0
     public var width: Double = 0
     public var height: Double = 0
-    public var kind: String = ""
+    public var document: Bool = false
+    public var multiline: Bool = false
     public var secure: Bool = false
+    public var keyboard: String = ""
+    public var returnKey: String = ""
+    public var capitalize: String = ""
+    public var autocorrect: String = ""
+    public var autofill: String = ""
     public var text: String = ""
+    public var base: Int = 0
+    public var length: Int = 0
     public var selStart: Int = 0
     public var selEnd: Int = 0
+    public var markStart: Int = 0
+    public var markEnd: Int = 0
     public init() {}
     init(_ r: inout WireReader) {
         id = r.int()
         active = r.bool()
+        show = r.int()
         x = r.float()
         y = r.float()
         width = r.float()
         height = r.float()
-        kind = r.string()
+        document = r.bool()
+        multiline = r.bool()
         secure = r.bool()
+        keyboard = r.string()
+        returnKey = r.string()
+        capitalize = r.string()
+        autocorrect = r.string()
+        autofill = r.string()
         text = r.string()
+        base = r.int()
+        length = r.int()
         selStart = r.int()
         selEnd = r.int()
-    }
-}
-
-public struct TextInputChangedCall {
-    public var id: Int = 0
-    public init() {}
-    init(_ r: inout WireReader) {
-        id = r.int()
+        markStart = r.int()
+        markEnd = r.int()
     }
 }
 
@@ -993,10 +1007,8 @@ public protocol HostCalls: AnyObject {
     func haptic(_ c: HapticCall)
     /// asks for a Frame at the next refresh of the display
     func requestFrame(_ c: RequestFrameCall)
-    /// where the caret of the text being edited is, and whether the keyboard shows for it
+    /// whether the keyboard shows and what for: the input's traits (platform.TextTraits), and its text. Show counts the requests to show the keyboard again. Offsets are UTF-16 units of the document, of which Text is the part around the selection, from Base; MarkStart is -1 without marked text. A window without Document takes text without one, as a terminal: the keyboard sees none
     func setTextInput(_ c: SetTextInputCall)
-    /// the text around the caret changed, which the keyboard's suggestions read again
-    func textInputChanged(_ c: TextInputChangedCall)
     /// the pointer's shape, for a mouse or a trackpad
     func setCursor(_ c: SetCursorCall)
     /// the tree of accessible elements changed; Focus names the one with the focus
@@ -1181,33 +1193,30 @@ public func dispatchCall(_ h: HostCalls, _ buf: UnsafeRawBufferPointer) -> [UInt
         h.setTextInput(SetTextInputCall(&r))
         return nil
     case 54:
-        h.textInputChanged(TextInputChangedCall(&r))
-        return nil
-    case 55:
         h.setCursor(SetCursorCall(&r))
         return nil
-    case 56:
+    case 55:
         h.accessibilityChanged(AccessibilityChangedCall(&r))
         return nil
-    case 57:
+    case 56:
         h.announce(AnnounceCall(&r))
         return nil
-    case 58:
+    case 57:
         h.showMenu(ShowMenuCall(&r))
         return nil
-    case 59:
+    case 58:
         h.textMetrics(TextMetricsCall(&r)).encode(&w)
         return w.buf
-    case 60:
+    case 59:
         h.measureText(MeasureTextCall(&r)).encode(&w)
         return w.buf
-    case 61:
+    case 60:
         h.textAdvances(TextAdvancesCall(&r)).encode(&w)
         return w.buf
-    case 62:
+    case 61:
         h.drawText(DrawTextCall(&r)).encode(&w)
         return w.buf
-    case 63:
+    case 62:
         h.registerFont(RegisterFontCall(&r)).encode(&w)
         return w.buf
     default:
@@ -1230,7 +1239,7 @@ public enum Event {
         w.bool(active)
         return w.buf
     }
-    /// the app went to the background (true) or came back
+    /// the app goes to the background (true) or came back. The host waits: iOS ends apps that use the GPU in the background, so that frames stop before it returns
     public static func background(background: Bool) -> [UInt8] {
         var w = WireWriter()
         w.uvarint(3)
@@ -1519,67 +1528,107 @@ public enum Event {
         w.bool(repeated)
         return w.buf
     }
-    /// the keyboard typed Text, in place of the marked text if any
-    public static func textInsert(id: Int, text: String) -> [UInt8] {
+    /// the keyboard put Text in Start to End of the document, or with no range in place of the marked text or the selection; answers TextStateReply
+    public static func textReplace(id: Int, hasRange: Bool, start: Int, end: Int, text: String) -> [UInt8] {
         var w = WireWriter()
         w.uvarint(38)
         w.int(id)
+        w.bool(hasRange)
+        w.int(start)
+        w.int(end)
         w.string(text)
         return w.buf
     }
-    /// the input method's text being composed, its selection in runes
-    public static func textMarked(id: Int, text: String, selStart: Int, selEnd: Int) -> [UInt8] {
+    /// the input method composes Text over Start to End, or with no range over the marked text or the selection; SelStart and SelEnd are in Text; answers TextStateReply
+    public static func textMark(id: Int, hasRange: Bool, start: Int, end: Int, text: String, selStart: Int, selEnd: Int) -> [UInt8] {
         var w = WireWriter()
         w.uvarint(39)
         w.int(id)
+        w.bool(hasRange)
+        w.int(start)
+        w.int(end)
         w.string(text)
         w.int(selStart)
         w.int(selEnd)
         return w.buf
     }
-    /// the keyboard deleted Before runes before the caret and After after it
-    public static func textDelete(id: Int, before: Int, after: Int) -> [UInt8] {
+    /// the marked text stays as text; answers TextStateReply
+    public static func textUnmark(id: Int) -> [UInt8] {
         var w = WireWriter()
         w.uvarint(40)
+        w.int(id)
+        return w.buf
+    }
+    /// the keyboard deleted Before units before the selection and After after it; answers TextStateReply
+    public static func textDelete(id: Int, before: Int, after: Int) -> [UInt8] {
+        var w = WireWriter()
+        w.uvarint(41)
         w.int(id)
         w.int(before)
         w.int(after)
         return w.buf
     }
-    /// an editing action of the keyboard or the edit menu: "newline", "tab", "cut", "copy", "paste", "selectAll", "left", …
-    public static func textCommand(id: Int, command: String) -> [UInt8] {
-        var w = WireWriter()
-        w.uvarint(41)
-        w.int(id)
-        w.string(command)
-        return w.buf
-    }
-    /// the text around the caret and the selection, in runes, for the keyboard's suggestions
-    public static func textState(id: Int) -> [UInt8] {
-        var w = WireWriter()
-        w.uvarint(42)
-        w.int(id)
-        return w.buf
-    }
-    /// the keyboard moved the caret or the selection, by runes from the caret
+    /// the keyboard moved the selection; answers TextStateReply
     public static func textSelect(id: Int, start: Int, end: Int) -> [UInt8] {
         var w = WireWriter()
-        w.uvarint(43)
+        w.uvarint(42)
         w.int(id)
         w.int(start)
         w.int(end)
         return w.buf
     }
-    /// the keyboard went away
-    public static func textInputEnded(id: Int) -> [UInt8] {
+    /// an editing action of the keyboard or the edit menu: "newline", "tab", "deleteBackward", "deleteForward", "cut", "copy", "paste", "selectAll", "left", …; answers TextStateReply
+    public static func textCommand(id: Int, command: String) -> [UInt8] {
+        var w = WireWriter()
+        w.uvarint(43)
+        w.int(id)
+        w.string(command)
+        return w.buf
+    }
+    /// the text around the selection, and the selection
+    public static func textState(id: Int) -> [UInt8] {
         var w = WireWriter()
         w.uvarint(44)
         w.int(id)
         return w.buf
     }
-    public static func menuChosen(id: Int, req: Int, action: String) -> [UInt8] {
+    /// a part of the document outside the text the host has
+    public static func textRange(id: Int, start: Int, end: Int) -> [UInt8] {
         var w = WireWriter()
         w.uvarint(45)
+        w.int(id)
+        w.int(start)
+        w.int(end)
+        return w.buf
+    }
+    /// where the range is on screen: its first line's rectangle
+    public static func textBounds(id: Int, start: Int, end: Int) -> [UInt8] {
+        var w = WireWriter()
+        w.uvarint(46)
+        w.int(id)
+        w.int(start)
+        w.int(end)
+        return w.buf
+    }
+    /// the offset nearest a point of the window
+    public static func textIndexAt(id: Int, x: Double, y: Double) -> [UInt8] {
+        var w = WireWriter()
+        w.uvarint(47)
+        w.int(id)
+        w.float(x)
+        w.float(y)
+        return w.buf
+    }
+    /// the keyboard went away
+    public static func textInputEnded(id: Int) -> [UInt8] {
+        var w = WireWriter()
+        w.uvarint(48)
+        w.int(id)
+        return w.buf
+    }
+    public static func menuChosen(id: Int, req: Int, action: String) -> [UInt8] {
+        var w = WireWriter()
+        w.uvarint(49)
         w.int(id)
         w.int(req)
         w.string(action)
@@ -1588,18 +1637,24 @@ public enum Event {
     /// the accessible elements, encoded as Nodes: for each, its ID, parent, role, label, value, hint, frame and actions
     public static func accessibilityTree(id: Int) -> [UInt8] {
         var w = WireWriter()
-        w.uvarint(46)
+        w.uvarint(50)
         w.int(id)
         return w.buf
     }
     /// an assistive technology's action on an element: "press", "increment", "decrement", "focus", "scrollForward", …
     public static func accessibilityAction(id: Int, node: Int, action: String) -> [UInt8] {
         var w = WireWriter()
-        w.uvarint(47)
+        w.uvarint(51)
         w.int(id)
         w.int(node)
         w.string(action)
         return w.buf
+    }
+}
+
+public struct BackgroundReply {
+    public init() {}
+    init(_ r: inout WireReader) {
     }
 }
 
@@ -1649,23 +1704,107 @@ public struct KeyReply {
     }
 }
 
-public struct TextStateReply {
-    public var before: String = ""
-    public var selected: String = ""
-    public var after: String = ""
-    public var marked: Int = 0
-    public var caretX: Double = 0
-    public var caretY: Double = 0
-    public var caretHeight: Double = 0
+public struct TextReplaceReply {
     public init() {}
     init(_ r: inout WireReader) {
-        before = r.string()
-        selected = r.string()
-        after = r.string()
-        marked = r.int()
-        caretX = r.float()
-        caretY = r.float()
-        caretHeight = r.float()
+    }
+}
+
+public struct TextMarkReply {
+    public init() {}
+    init(_ r: inout WireReader) {
+    }
+}
+
+public struct TextUnmarkReply {
+    public init() {}
+    init(_ r: inout WireReader) {
+    }
+}
+
+public struct TextDeleteReply {
+    public init() {}
+    init(_ r: inout WireReader) {
+    }
+}
+
+public struct TextSelectReply {
+    public init() {}
+    init(_ r: inout WireReader) {
+    }
+}
+
+public struct TextCommandReply {
+    public init() {}
+    init(_ r: inout WireReader) {
+    }
+}
+
+public struct TextStateReply {
+    public var text: String = ""
+    public var base: Int = 0
+    public var length: Int = 0
+    public var selStart: Int = 0
+    public var selEnd: Int = 0
+    public var markStart: Int = 0
+    public var markEnd: Int = 0
+    public var x: Double = 0
+    public var y: Double = 0
+    public var width: Double = 0
+    public var height: Double = 0
+    public init() {}
+    init(_ r: inout WireReader) {
+        text = r.string()
+        base = r.int()
+        length = r.int()
+        selStart = r.int()
+        selEnd = r.int()
+        markStart = r.int()
+        markEnd = r.int()
+        x = r.float()
+        y = r.float()
+        width = r.float()
+        height = r.float()
+    }
+}
+
+public struct TextRangeReply {
+    public var text: String = ""
+    public var start: Int = 0
+    public var end: Int = 0
+    public init() {}
+    init(_ r: inout WireReader) {
+        text = r.string()
+        start = r.int()
+        end = r.int()
+    }
+}
+
+public struct TextBoundsReply {
+    public var ok: Bool = false
+    public var x: Double = 0
+    public var y: Double = 0
+    public var width: Double = 0
+    public var height: Double = 0
+    public var end: Int = 0
+    public init() {}
+    init(_ r: inout WireReader) {
+        ok = r.bool()
+        x = r.float()
+        y = r.float()
+        width = r.float()
+        height = r.float()
+        end = r.int()
+    }
+}
+
+public struct TextIndexAtReply {
+    public var ok: Bool = false
+    public var index: Int = 0
+    public init() {}
+    init(_ r: inout WireReader) {
+        ok = r.bool()
+        index = r.int()
     }
 }
 

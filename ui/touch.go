@@ -294,3 +294,9 @@ func (rt *engine) flingStep(now time.Time) {
 	}
 	rt.animating = true
 }
+
+// lowMemory lets go of what the next frame makes again.
+func (rt *engine) lowMemory() {
+	rt.text.Forget()
+	rt.requestFrame()
+}
