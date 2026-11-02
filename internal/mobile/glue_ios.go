@@ -34,6 +34,9 @@ func (cHost) call(msg []byte) []byte {
 	return b
 }
 
+// callHere calls the host on this thread, for what needs no UI thread.
+func (h cHost) callHere(msg []byte) []byte { return h.call(msg) }
+
 func (cHost) post() { C.mygo_host_post() }
 
 func hostLog(isErr bool, line []byte) {

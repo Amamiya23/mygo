@@ -790,6 +790,14 @@ object HostImpl : HostCalls {
 
     override fun pluginCall(c: PluginCallCall) = PluginHost.call(c)
 
+    // Sound, called on the audio's thread.
+    override fun audioOpen(c: AudioOpenCall): AudioOpenReply = Sound.open(c)
+    override fun audioWrite(c: AudioWriteCall): AudioWriteReply = Sound.write(c)
+    override fun audioClose(): AudioCloseReply {
+        Sound.close()
+        return AudioCloseReply()
+    }
+
     override fun haptic(c: HapticCall) {
         val v: View = front()?.view ?: root
         val k = when (c.kind) {

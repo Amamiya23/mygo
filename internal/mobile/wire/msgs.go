@@ -67,21 +67,24 @@ const (
 	CallPopupMenu              = 61
 	CallSetBarItems            = 62
 	CallPluginCall             = 63
-	CallHaptic                 = 64
-	CallRequestFrame           = 65
-	CallSetTextInput           = 66
-	CallSetCursor              = 67
-	CallAccessibilityChanged   = 68
-	CallAnnounce               = 69
-	CallShowMenu               = 70
-	CallSetBackAvailable       = 71
-	CallShowMagnifier          = 72
-	CallHideMagnifier          = 73
-	CallTextMetrics            = 74
-	CallMeasureText            = 75
-	CallTextAdvances           = 76
-	CallDrawText               = 77
-	CallRegisterFont           = 78
+	CallAudioOpen              = 64
+	CallAudioWrite             = 65
+	CallAudioClose             = 66
+	CallHaptic                 = 67
+	CallRequestFrame           = 68
+	CallSetTextInput           = 69
+	CallSetCursor              = 70
+	CallAccessibilityChanged   = 71
+	CallAnnounce               = 72
+	CallShowMenu               = 73
+	CallSetBackAvailable       = 74
+	CallShowMagnifier          = 75
+	CallHideMagnifier          = 76
+	CallTextMetrics            = 77
+	CallMeasureText            = 78
+	CallTextAdvances           = 79
+	CallDrawText               = 80
+	CallRegisterFont           = 81
 )
 
 // Numbers of events.
@@ -1241,6 +1244,66 @@ func (m *PluginCall) Encode(w *Writer) {
 
 // Wait reports whether the caller waits for the host to run it.
 func (*PluginCall) Wait() bool { return false }
+
+// AudioOpen is opens the sound's output: stereo at Rate frames a second, holding about Ahead milliseconds; on the caller's thread.
+type AudioOpen struct {
+	Rate  int
+	Ahead int
+}
+
+func (m *AudioOpen) Encode(w *Writer) {
+	w.Uvarint(CallAudioOpen)
+	w.Int(m.Rate)
+	w.Int(m.Ahead)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*AudioOpen) Wait() bool { return true }
+
+type AudioOpenReply struct {
+	Error string
+}
+
+func (m *AudioOpenReply) Decode(r *Reader) {
+	m.Error = r.String()
+}
+
+// AudioWrite is plays interleaved stereo float32 samples after those written, waiting while the output holds enough; on the caller's thread.
+type AudioWrite struct {
+	Samples []byte
+}
+
+func (m *AudioWrite) Encode(w *Writer) {
+	w.Uvarint(CallAudioWrite)
+	w.Bytes(m.Samples)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*AudioWrite) Wait() bool { return true }
+
+type AudioWriteReply struct {
+	Error string
+}
+
+func (m *AudioWriteReply) Decode(r *Reader) {
+	m.Error = r.String()
+}
+
+type AudioClose struct {
+}
+
+func (m *AudioClose) Encode(w *Writer) {
+	w.Uvarint(CallAudioClose)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*AudioClose) Wait() bool { return true }
+
+type AudioCloseReply struct {
+}
+
+func (m *AudioCloseReply) Decode(r *Reader) {
+}
 
 // Haptic is "selection", "light", "medium", "heavy", "success", "warning" or "error".
 type Haptic struct {

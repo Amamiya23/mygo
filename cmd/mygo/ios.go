@@ -120,7 +120,7 @@ func (t *iosToolchain) buildApp(ctx context.Context, c, dc *Config, tk *task, op
 	// the app's Go code only links.
 	var frameworks []string
 	for _, f := range []string{"UIKit", "WebKit", "Metal", "QuartzCore", "CoreText", "CoreGraphics", "Security", "CoreFoundation",
-		"UserNotifications", "UniformTypeIdentifiers", "Network"} {
+		"UserNotifications", "UniformTypeIdentifiers", "Network", "AVFoundation"} {
 		frameworks = append(frameworks, "-framework", f)
 	}
 	for _, f := range plugins.frameworks() {

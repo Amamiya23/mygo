@@ -848,6 +848,45 @@ class PluginCallCall(
     }
 }
 
+class AudioOpenCall(
+    @JvmField var rate: Long = 0L,
+    @JvmField var ahead: Long = 0L,
+) {
+    constructor(r: WireReader) : this() {
+        rate = r.int()
+        ahead = r.int()
+    }
+}
+
+class AudioOpenReply(
+    @JvmField var error: String = "",
+) {
+    fun encode(w: WireWriter) {
+        w.string(error)
+    }
+}
+
+class AudioWriteCall(
+    @JvmField var samples: ByteArray = ByteArray(0),
+) {
+    constructor(r: WireReader) : this() {
+        samples = r.bytes()
+    }
+}
+
+class AudioWriteReply(
+    @JvmField var error: String = "",
+) {
+    fun encode(w: WireWriter) {
+        w.string(error)
+    }
+}
+
+class AudioCloseReply() {
+    fun encode(w: WireWriter) {
+    }
+}
+
 class HapticCall(
     @JvmField var kind: String = "",
 ) {
@@ -1222,6 +1261,11 @@ interface HostCalls {
     fun setBarItems(c: SetBarItemsCall)
     /** a call of a plugin's native code: Args and PluginResult's Result are JSON */
     fun pluginCall(c: PluginCallCall)
+    /** opens the sound's output: stereo at Rate frames a second, holding about Ahead milliseconds; on the caller's thread */
+    fun audioOpen(c: AudioOpenCall): AudioOpenReply
+    /** plays interleaved stereo float32 samples after those written, waiting while the output holds enough; on the caller's thread */
+    fun audioWrite(c: AudioWriteCall): AudioWriteReply
+    fun audioClose(): AudioCloseReply
     /** "selection", "light", "medium", "heavy", "success", "warning" or "error" */
     fun haptic(c: HapticCall)
     /** asks for a Frame at the next refresh of the display */
@@ -1320,21 +1364,24 @@ fun dispatchCall(h: HostCalls, buf: ByteArray): ByteArray? {
         61 -> h.popupMenu(PopupMenuCall(r))
         62 -> h.setBarItems(SetBarItemsCall(r))
         63 -> h.pluginCall(PluginCallCall(r))
-        64 -> h.haptic(HapticCall(r))
-        65 -> h.requestFrame(RequestFrameCall(r))
-        66 -> h.setTextInput(SetTextInputCall(r))
-        67 -> h.setCursor(SetCursorCall(r))
-        68 -> h.accessibilityChanged(AccessibilityChangedCall(r))
-        69 -> h.announce(AnnounceCall(r))
-        70 -> h.showMenu(ShowMenuCall(r))
-        71 -> h.setBackAvailable(SetBackAvailableCall(r))
-        72 -> h.showMagnifier(ShowMagnifierCall(r))
-        73 -> h.hideMagnifier(HideMagnifierCall(r))
-        74 -> { h.textMetrics(TextMetricsCall(r)).encode(w); return w.toByteArray() }
-        75 -> { h.measureText(MeasureTextCall(r)).encode(w); return w.toByteArray() }
-        76 -> { h.textAdvances(TextAdvancesCall(r)).encode(w); return w.toByteArray() }
-        77 -> { h.drawText(DrawTextCall(r)).encode(w); return w.toByteArray() }
-        78 -> { h.registerFont(RegisterFontCall(r)).encode(w); return w.toByteArray() }
+        64 -> { h.audioOpen(AudioOpenCall(r)).encode(w); return w.toByteArray() }
+        65 -> { h.audioWrite(AudioWriteCall(r)).encode(w); return w.toByteArray() }
+        66 -> { h.audioClose().encode(w); return w.toByteArray() }
+        67 -> h.haptic(HapticCall(r))
+        68 -> h.requestFrame(RequestFrameCall(r))
+        69 -> h.setTextInput(SetTextInputCall(r))
+        70 -> h.setCursor(SetCursorCall(r))
+        71 -> h.accessibilityChanged(AccessibilityChangedCall(r))
+        72 -> h.announce(AnnounceCall(r))
+        73 -> h.showMenu(ShowMenuCall(r))
+        74 -> h.setBackAvailable(SetBackAvailableCall(r))
+        75 -> h.showMagnifier(ShowMagnifierCall(r))
+        76 -> h.hideMagnifier(HideMagnifierCall(r))
+        77 -> { h.textMetrics(TextMetricsCall(r)).encode(w); return w.toByteArray() }
+        78 -> { h.measureText(MeasureTextCall(r)).encode(w); return w.toByteArray() }
+        79 -> { h.textAdvances(TextAdvancesCall(r)).encode(w); return w.toByteArray() }
+        80 -> { h.drawText(DrawTextCall(r)).encode(w); return w.toByteArray() }
+        81 -> { h.registerFont(RegisterFontCall(r)).encode(w); return w.toByteArray() }
     }
     return null
 }

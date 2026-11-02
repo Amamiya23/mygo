@@ -12,17 +12,61 @@ func textCall(m message, reply interface{ Decode(*wire.Reader) }) bool {
 	if b == nil || b.t == nil {
 		return false
 	}
-	if h, ok := b.t.h.(interface{ callHere(msg []byte) []byte }); ok {
-		var w wire.Writer
-		m.Encode(&w)
-		out := h.callHere(w.Buf)
-		if reply != nil {
-			reply.Decode(&wire.Reader{Buf: out})
-		}
-		return true
+	if !callHere(b, m, reply) {
+		b.t.call(m, reply)
 	}
-	b.t.call(m, reply)
 	return true
+}
+
+// callHere calls the host on the caller's thread, where the host's glue can.
+func callHere(b *Backend, m message, reply interface{ Decode(*wire.Reader) }) bool {
+	h, ok := b.t.h.(interface{ callHere(msg []byte) []byte })
+	if !ok {
+		return false
+	}
+	var w wire.Writer
+	m.Encode(&w)
+	out := h.callHere(w.Buf)
+	if reply != nil {
+		reply.Decode(&wire.Reader{Buf: out})
+	}
+	return true
+}
+
+// The sound's output: blocking calls of the host on the audio's own thread,
+// which must not wait for the UI thread, nor the UI thread for it.
+
+// AudioOpen opens the output.
+func AudioOpen(rate, aheadMS int) error {
+	b := current.Load()
+	if b == nil || b.t == nil {
+		return errUnsupported
+	}
+	var r wire.AudioOpenReply
+	if !callHere(b, &wire.AudioOpen{Rate: rate, Ahead: aheadMS}, &r) {
+		return errUnsupported
+	}
+	return errorOf(r.Error)
+}
+
+// AudioWrite plays samples after those written.
+func AudioWrite(samples []byte) error {
+	b := current.Load()
+	if b == nil || b.t == nil {
+		return errUnsupported
+	}
+	var r wire.AudioWriteReply
+	if !callHere(b, &wire.AudioWrite{Samples: samples}, &r) {
+		return errUnsupported
+	}
+	return errorOf(r.Error)
+}
+
+// AudioClose closes the output.
+func AudioClose() {
+	if b := current.Load(); b != nil && b.t != nil {
+		callHere(b, &wire.AudioClose{}, nil)
+	}
 }
 
 // TextMetrics returns the metrics of a font.

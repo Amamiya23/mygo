@@ -128,6 +128,11 @@ var calls = []msg{
 		args: []field{f("ID", "int"), f("Titles", "strings"), f("Symbols", "strings"), f("Icons", "strings")}},
 	{name: "PluginCall", doc: "a call of a plugin's native code: Args and PluginResult's Result are JSON", args: []field{f("Req", "int"),
 		f("Plugin", "string"), f("Method", "string"), f("Args", "string")}},
+	{name: "AudioOpen", doc: "opens the sound's output: stereo at Rate frames a second, holding about Ahead milliseconds; on the caller's thread", wait: true,
+		args: []field{f("Rate", "int"), f("Ahead", "int")}, reply: []field{f("Error", "string")}},
+	{name: "AudioWrite", doc: "plays interleaved stereo float32 samples after those written, waiting while the output holds enough; on the caller's thread", wait: true,
+		args: []field{f("Samples", "bytes")}, reply: []field{f("Error", "string")}},
+	{name: "AudioClose", wait: true},
 	{name: "Haptic", doc: `"selection", "light", "medium", "heavy", "success", "warning" or "error"`, args: []field{f("Kind", "string")}},
 
 	// Native UI.

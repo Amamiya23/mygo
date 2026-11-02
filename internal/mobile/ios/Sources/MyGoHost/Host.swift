@@ -531,6 +531,14 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
 
     func pluginCall(_ c: PluginCallCall) { PluginHost.call(c) }
 
+    // Sound, called on the audio's thread.
+    func audioOpen(_ c: AudioOpenCall) -> AudioOpenReply { Sound.shared.open(c) }
+    func audioWrite(_ c: AudioWriteCall) -> AudioWriteReply { Sound.shared.write(c) }
+    func audioClose() -> AudioCloseReply {
+        Sound.shared.close()
+        return AudioCloseReply()
+    }
+
     func haptic(_ c: HapticCall) {
         switch c.kind {
         case "selection": UISelectionFeedbackGenerator().selectionChanged()

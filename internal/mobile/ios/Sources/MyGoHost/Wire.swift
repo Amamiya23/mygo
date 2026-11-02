@@ -827,6 +827,46 @@ public struct PluginCallCall {
     }
 }
 
+public struct AudioOpenCall {
+    public var rate: Int = 0
+    public var ahead: Int = 0
+    public init() {}
+    init(_ r: inout WireReader) {
+        rate = r.int()
+        ahead = r.int()
+    }
+}
+
+public struct AudioOpenReply {
+    public var error: String = ""
+    public init() {}
+    func encode(_ w: inout WireWriter) {
+        w.string(error)
+    }
+}
+
+public struct AudioWriteCall {
+    public var samples: [UInt8] = []
+    public init() {}
+    init(_ r: inout WireReader) {
+        samples = r.bytes()
+    }
+}
+
+public struct AudioWriteReply {
+    public var error: String = ""
+    public init() {}
+    func encode(_ w: inout WireWriter) {
+        w.string(error)
+    }
+}
+
+public struct AudioCloseReply {
+    public init() {}
+    func encode(_ w: inout WireWriter) {
+    }
+}
+
 public struct HapticCall {
     public var kind: String = ""
     public init() {}
@@ -1201,6 +1241,11 @@ public protocol HostCalls: AnyObject {
     func setBarItems(_ c: SetBarItemsCall)
     /// a call of a plugin's native code: Args and PluginResult's Result are JSON
     func pluginCall(_ c: PluginCallCall)
+    /// opens the sound's output: stereo at Rate frames a second, holding about Ahead milliseconds; on the caller's thread
+    func audioOpen(_ c: AudioOpenCall) -> AudioOpenReply
+    /// plays interleaved stereo float32 samples after those written, waiting while the output holds enough; on the caller's thread
+    func audioWrite(_ c: AudioWriteCall) -> AudioWriteReply
+    func audioClose() -> AudioCloseReply
     /// "selection", "light", "medium", "heavy", "success", "warning" or "error"
     func haptic(_ c: HapticCall)
     /// asks for a Frame at the next refresh of the display
@@ -1426,48 +1471,57 @@ public func dispatchCall(_ h: HostCalls, _ buf: UnsafeRawBufferPointer) -> [UInt
         h.pluginCall(PluginCallCall(&r))
         return nil
     case 64:
+        h.audioOpen(AudioOpenCall(&r)).encode(&w)
+        return w.buf
+    case 65:
+        h.audioWrite(AudioWriteCall(&r)).encode(&w)
+        return w.buf
+    case 66:
+        h.audioClose().encode(&w)
+        return w.buf
+    case 67:
         h.haptic(HapticCall(&r))
         return nil
-    case 65:
+    case 68:
         h.requestFrame(RequestFrameCall(&r))
         return nil
-    case 66:
+    case 69:
         h.setTextInput(SetTextInputCall(&r))
         return nil
-    case 67:
+    case 70:
         h.setCursor(SetCursorCall(&r))
         return nil
-    case 68:
+    case 71:
         h.accessibilityChanged(AccessibilityChangedCall(&r))
         return nil
-    case 69:
+    case 72:
         h.announce(AnnounceCall(&r))
         return nil
-    case 70:
+    case 73:
         h.showMenu(ShowMenuCall(&r))
         return nil
-    case 71:
+    case 74:
         h.setBackAvailable(SetBackAvailableCall(&r))
         return nil
-    case 72:
+    case 75:
         h.showMagnifier(ShowMagnifierCall(&r))
         return nil
-    case 73:
+    case 76:
         h.hideMagnifier(HideMagnifierCall(&r))
         return nil
-    case 74:
+    case 77:
         h.textMetrics(TextMetricsCall(&r)).encode(&w)
         return w.buf
-    case 75:
+    case 78:
         h.measureText(MeasureTextCall(&r)).encode(&w)
         return w.buf
-    case 76:
+    case 79:
         h.textAdvances(TextAdvancesCall(&r)).encode(&w)
         return w.buf
-    case 77:
+    case 80:
         h.drawText(DrawTextCall(&r)).encode(&w)
         return w.buf
-    case 78:
+    case 81:
         h.registerFont(RegisterFontCall(&r)).encode(&w)
         return w.buf
     default:

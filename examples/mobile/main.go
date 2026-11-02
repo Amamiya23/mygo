@@ -10,9 +10,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/audio"
 	"github.com/egoist/mygo/plugins/biometrics"
 	"github.com/egoist/mygo/plugins/camera"
 	"github.com/egoist/mygo/plugins/imagepicker"
@@ -432,6 +434,16 @@ func (a *app) system(c *ui.Context) {
 				if s := a.results["camera"]; s != "" {
 					ui.Text(c, s).FontSize(13).Padding(4, 16).TextColor(t.TextMuted)
 				}
+				row("Play a tone", func(ctx context.Context) string {
+					samples := make([]float32, 48000)
+					for i := range samples {
+						samples[i] = 0.2 * float32(math.Sin(2*math.Pi*440*float64(i)/48000))
+					}
+					p := audio.NewSound(48000, 1, samples).NewPlayer()
+					p.Play()
+					time.Sleep(500 * time.Millisecond)
+					return fmt.Sprintf("at %v of a second", p.Position())
+				})
 				row("May it use the camera", func(ctx context.Context) string {
 					st, err := permissionflow.Check(permissionflow.Camera)
 					if err != nil {
