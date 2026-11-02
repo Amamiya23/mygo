@@ -25,6 +25,7 @@ type surface struct {
 	gone    bool
 	// deferred is a frame the app in the background did not draw.
 	deferred bool
+	cursor   platform.Cursor
 
 	// The fingers on the screen, by the host's numbers: the first is the
 	// pointer, two pinch.
@@ -149,7 +150,37 @@ func (s *surface) foreground() {
 // draw with their GPUs.
 func (s *surface) PresentPixels([]byte, int, int, int) {}
 
-func (s *surface) SetCursor(c platform.Cursor) {}
+// SetCursor shows a mouse's or a trackpad's pointer, on an iPad or a Chromebook.
+func (s *surface) SetCursor(c platform.Cursor) {
+	if c == s.cursor {
+		return
+	}
+	s.cursor = c
+	name := "default"
+	switch c {
+	case platform.CursorPointer:
+		name = "pointer"
+	case platform.CursorText, platform.CursorVerticalText:
+		name = "text"
+	case platform.CursorMove:
+		name = "move"
+	case platform.CursorResizeEW, platform.CursorResizeE, platform.CursorResizeW, platform.CursorResizeColumn:
+		name = "resizeX"
+	case platform.CursorResizeNS, platform.CursorResizeN, platform.CursorResizeS, platform.CursorResizeRow:
+		name = "resizeY"
+	case platform.CursorGrab:
+		name = "grab"
+	case platform.CursorGrabbing:
+		name = "grabbing"
+	case platform.CursorCrosshair:
+		name = "crosshair"
+	case platform.CursorNotAllowed:
+		name = "notAllowed"
+	case platform.CursorNone:
+		name = "none"
+	}
+	s.w.b.call(&wire.SetCursor{ID: s.w.id, Cursor: name}, nil)
+}
 
 // SetBackground tells the host the color the content's frames fill the
 // window with, which the system's bars around it take on Android (its

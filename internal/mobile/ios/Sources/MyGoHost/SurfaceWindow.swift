@@ -6,7 +6,7 @@
 import UIKit
 import QuartzCore
 
-final class SurfaceWindow: HostWindow, UITextInput {
+final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate {
     private var link: CADisplayLink?
     private var fingers: [ObjectIdentifier: Int] = [:]
     private var nextFinger = 1
@@ -43,6 +43,58 @@ final class SurfaceWindow: HostWindow, UITextInput {
         l.isPaused = true
         l.add(to: .main, forMode: .common)
         link = l
+        // A mouse's or a trackpad's pointer, on an iPad: it hovers, it scrolls
+        // with the wheel and two fingers, and it takes the content's shape.
+        let hover = UIHoverGestureRecognizer(target: self, action: #selector(hovered(_:)))
+        addGestureRecognizer(hover)
+        let wheel = UIPanGestureRecognizer(target: self, action: #selector(wheeled(_:)))
+        wheel.allowedScrollTypesMask = .all
+        wheel.allowedTouchTypes = []
+        wheel.maximumNumberOfTouches = 0
+        addGestureRecognizer(wheel)
+        addInteraction(UIPointerInteraction(delegate: self))
+    }
+
+    @objc private func hovered(_ g: UIHoverGestureRecognizer) {
+        let p = g.location(in: self)
+        let phase: String
+        switch g.state {
+        case .ended, .cancelled, .failed: phase = "cancel"
+        default: phase = "move"
+        }
+        Go.send(Event.touch(id: id, pointer: 0, phase: phase, kind: "mouse", x: Double(p.x), y: Double(p.y), pressure: 0, buttons: 0, time: CACurrentMediaTime()))
+    }
+
+    private var wheelLast = CGPoint.zero
+
+    @objc private func wheeled(_ g: UIPanGestureRecognizer) {
+        if g.state == .began { wheelLast = .zero }
+        let t = g.translation(in: self)
+        let p = g.location(in: self)
+        // Against the fingers, as what it moves is the view down the content.
+        Go.send(Event.scroll(id: id, x: Double(p.x), y: Double(p.y), dx: Double(wheelLast.x - t.x), dy: Double(wheelLast.y - t.y), precise: true, phase: ""))
+        wheelLast = t
+    }
+
+    private var pointerShape = "default"
+
+    func setCursor(_ name: String) {
+        pointerShape = name
+        for i in interactions { (i as? UIPointerInteraction)?.invalidate() }
+    }
+
+    func pointerInteraction(_ i: UIPointerInteraction, styleFor region: UIPointerRegion) -> UIPointerStyle? {
+        switch pointerShape {
+        case "text": return UIPointerStyle(shape: .verticalBeam(length: 20))
+        case "none": return .hidden()
+        case "pointer": return UIPointerStyle(shape: .roundedRect(CGRect(x: -12, y: -12, width: 24, height: 24), radius: 12))
+        default: return .system()
+        }
+    }
+
+    func pointerInteraction(_ i: UIPointerInteraction, regionFor r: UIPointerRegionRequest, defaultRegion: UIPointerRegion) -> UIPointerRegion? {
+        // Asked again as it moves: the content changes under it.
+        UIPointerRegion(rect: CGRect(x: r.location.x - 1, y: r.location.y - 1, width: 2, height: 2))
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -591,6 +643,10 @@ final class AccessElement: UIAccessibilityElement {
     var box = CGRect.zero
     weak var surface: SurfaceWindow?
 
+    /// What makes VoiceOver say "text field", which UIKit's text fields have
+    /// and names no constant for.
+    private static let textEntry = UIAccessibilityTraits(rawValue: 1 << 18)
+
     // platform.AccessRole and its states, as Go numbers them.
     private enum Role: Int {
         case group = 0, text, button, link, checkBox, radio, toggle, slider, progress, textField, image
@@ -623,7 +679,7 @@ final class AccessElement: UIAccessibilityElement {
                 case .slider: traits.insert(.adjustable)
                 case .image: traits.insert(.image)
                 case .heading: traits.insert(.header)
-                case .textField: traits.insert(.searchField)
+                case .textField: traits.insert(AccessElement.textEntry)
                 case .text: traits.insert(.staticText)
                 default: break
                 }

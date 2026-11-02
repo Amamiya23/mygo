@@ -111,13 +111,22 @@ object HostImpl : HostCalls {
         Os.setenv("XDG_CONFIG_HOME", files, true)
         Os.setenv("XDG_CACHE_HOME", cache, true)
         Os.setenv("TMPDIR", cache, true)
-        Os.setenv("MYGO_RESOURCES", Resources.extract(a), true)
         intent?.getStringExtra("mygo.env")?.split('\n')?.forEach { line ->
             val i = line.indexOf('=')
             if (i > 0) Os.setenv(line.substring(0, i), line.substring(i + 1), true)
         }
         registerPlugins()
-        MyGoNative.start()
+        // The first launch of a version copies the app's resources, which may
+        // be many: off the UI thread, which Android watches. Events sent
+        // meanwhile wait for the backend.
+        val ctx = a.applicationContext
+        Thread {
+            val dir = Resources.extract(ctx)
+            root.post {
+                Os.setenv("MYGO_RESOURCES", dir, true)
+                MyGoNative.start()
+            }
+        }.start()
     }
 
     fun themeColor(attr: Int): Int {

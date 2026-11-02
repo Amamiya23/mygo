@@ -12,6 +12,7 @@ import android.widget.Magnifier
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
+import android.view.PointerIcon
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
@@ -232,7 +233,23 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
         return TextRangeReply(r).text
     }
 
-    fun setCursor(cursor: String) {}
+    /** A mouse's pointer, on a Chromebook or a tablet with one. */
+    fun setCursor(cursor: String) {
+        val kind = when (cursor) {
+            "text" -> PointerIcon.TYPE_TEXT
+            "pointer" -> PointerIcon.TYPE_HAND
+            "move" -> PointerIcon.TYPE_ALL_SCROLL
+            "resizeX" -> PointerIcon.TYPE_HORIZONTAL_DOUBLE_ARROW
+            "resizeY" -> PointerIcon.TYPE_VERTICAL_DOUBLE_ARROW
+            "grab" -> PointerIcon.TYPE_GRAB
+            "grabbing" -> PointerIcon.TYPE_GRABBING
+            "crosshair" -> PointerIcon.TYPE_CROSSHAIR
+            "notAllowed" -> PointerIcon.TYPE_NO_DROP
+            "none" -> PointerIcon.TYPE_NULL
+            else -> PointerIcon.TYPE_DEFAULT
+        }
+        surface.pointerIcon = PointerIcon.getSystemIcon(context, kind)
+    }
 
     private var actionMode: ActionMode? = null
 
@@ -294,13 +311,30 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
 
         override fun surfaceCreated(h: SurfaceHolder) {
             native = MyGoNative.nativeWindow(h.surface)
-            val hz = display?.refreshRate?.toDouble() ?: 60.0
+            val hz = display?.supportedModes?.maxOfOrNull { it.refreshRate }?.toDouble() ?: display?.refreshRate?.toDouble() ?: 60.0
             Go.send(Event.surfaceChanged(wid, native, width / density, height / density, density, hz))
         }
 
         override fun surfaceChanged(h: SurfaceHolder, format: Int, w: Int, ht: Int) {
+            preferFastest(h)
             reportSize()
             requestFrame()
+        }
+
+        /** Asks the display for its fastest refresh, which Choreographer then gives. */
+        private fun preferFastest(h: SurfaceHolder) {
+            if (android.os.Build.VERSION.SDK_INT < 30) return
+            val modes = display?.supportedModes ?: return
+            val hz = modes.maxOfOrNull { it.refreshRate } ?: return
+            runCatching { h.surface.setFrameRate(hz, android.view.Surface.FRAME_RATE_COMPATIBILITY_DEFAULT) }
+        }
+
+        // A mouse's pointer hovers.
+        override fun onHoverEvent(e: MotionEvent): Boolean {
+            val d = density
+            val phase = if (e.actionMasked == MotionEvent.ACTION_HOVER_EXIT) "cancel" else "move"
+            Go.send(Event.touch(wid, 0, phase, "mouse", e.x / d, e.y / d, 0.0, 0, e.eventTime / 1000.0))
+            return true
         }
 
         override fun surfaceDestroyed(h: SurfaceHolder) = releaseNative()

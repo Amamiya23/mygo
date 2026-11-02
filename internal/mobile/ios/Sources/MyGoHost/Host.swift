@@ -546,7 +546,7 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
 
     func requestFrame(_ c: RequestFrameCall) { surface(c.id)?.requestFrame() }
     func setTextInput(_ c: SetTextInputCall) { surface(c.id)?.setTextInput(c) }
-    func setCursor(_ c: SetCursorCall) {}
+    func setCursor(_ c: SetCursorCall) { surface(c.id)?.setCursor(c.cursor) }
     func accessibilityChanged(_ c: AccessibilityChangedCall) { surface(c.id)?.accessibilityChanged(focus: c.focus) }
     func announce(_ c: AnnounceCall) { UIAccessibility.post(notification: .announcement, argument: c.text) }
     func showMenu(_ c: ShowMenuCall) { surface(c.id)?.showMenu(c) }

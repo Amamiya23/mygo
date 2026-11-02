@@ -79,7 +79,7 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 		rt.scroll(float32(ev.DX), float32(ev.DY), Modifiers(ev.Mods), ev.Precise, ev.Momentum)
 	case platform.PointerZoom:
 		rt.pointerMove(x, y)
-		rt.zoom(float32(ev.Scale), Modifiers(ev.Mods))
+		rt.zoom(float32(ev.Scale), float32(ev.Rotation), Modifiers(ev.Mods))
 	case platform.KeyPressed:
 		rt.modsChanged(Modifiers(ev.Mods))
 		taken = rt.keyDownPhysical(Modifiers(ev.Mods), Key(ev.Key), Key(ev.PhysicalKey), ev.Repeat)
@@ -612,13 +612,13 @@ func (rt *engine) scroll(dx, dy float32, mods Modifiers, precise, momentum bool)
 
 // zoom gives a pinch to the element under the pointer that handles its
 // input; no element zooms of its own.
-func (rt *engine) zoom(scale float32, mods Modifiers) {
-	if scale <= 0 || scale == 1 {
+func (rt *engine) zoom(scale, rotation float32, mods Modifiers) {
+	if scale <= 0 || scale == 1 && rotation == 0 {
 		return
 	}
 	chain := rt.appendHitChain(rt.chain[:0], rt.pointerX, rt.pointerY)
 	rt.chain = chain[:0]
-	rt.deliver(rt.handler(chain), InputEvent{Kind: InputZoom, Scale: scale, Mods: mods})
+	rt.deliver(rt.handler(chain), InputEvent{Kind: InputZoom, Scale: scale, Rotation: rotation, Mods: mods})
 }
 
 // dragTo returns the offset of content whose thumb moved by moved DIPs
