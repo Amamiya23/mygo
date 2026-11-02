@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/biometrics"
+	"github.com/egoist/mygo/plugins/camera"
 	"github.com/egoist/mygo/plugins/imagepicker"
 	"github.com/egoist/mygo/plugins/location"
 	"github.com/egoist/mygo/plugins/preferences"
@@ -55,6 +56,8 @@ type app struct {
 	bars    bool
 	status  string
 	results map[string]string
+	cam     *camera.Camera
+	camOn   bool
 }
 
 func heading(c *ui.Context, s string) {
@@ -389,6 +392,41 @@ func (a *app) system(c *ui.Context) {
 						return "no reading"
 					}
 				})
+				if mobile.ListRow(c.Key("Camera"), mobile.RowOptions{Title: "Camera", Trailing: func() { mobile.Switch(c.Key("cs"), &a.camOn) }}).Clicked() {
+				}
+				if a.camOn {
+					if a.cam == nil {
+						cam, err := camera.New(a.win, camera.Options{})
+						if err != nil {
+							a.results["camera"] = err.Error()
+							a.camOn = false
+						} else {
+							a.cam = cam
+						}
+					}
+					if a.cam != nil {
+						ui.Box(c).Height(240).Shrink(0).FillWidth().Children(func() {
+							ui.WebView(c, a.cam).Fill()
+							b := ui.Text(c, "Take a photo").Absolute().Bottom(8).Left(8).Padding(6, 10).Radius(8).
+								Background(ui.RGBA(0, 0, 0, 0.6)).TextColor(ui.RGB(255, 255, 255))
+							if b.Clicked() {
+								go func() {
+									p, err := a.cam.TakePhoto(context.Background())
+									a.win.Update(func() {
+										if err != nil {
+											a.results["camera"] = err.Error()
+										} else {
+											a.results["camera"] = p
+										}
+									})
+								}()
+							}
+						})
+					}
+				}
+				if s := a.results["camera"]; s != "" {
+					ui.Text(c, s).FontSize(13).Padding(4, 16).TextColor(t.TextMuted)
+				}
 				row("Count launches", func(ctx context.Context) string {
 					n := 0
 					preferences.Get("launches", &n)

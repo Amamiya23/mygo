@@ -63,6 +63,7 @@ type Application struct {
 	onWillQuit        listeners[func(*QuitEvent)]
 	onQuit            listeners[func()]
 	onMemoryWarning   listeners[func()]
+	saveState         func() []byte
 	onActivate        listeners[func(bool)]
 	onDidBecomeActive listeners[func()]
 	onDidResignActive listeners[func()]
@@ -492,6 +493,17 @@ func (a *Application) OnWillQuit(fn func(e *QuitEvent)) (off func()) {
 // OnQuit is called after the event loop has stopped.
 func (a *Application) OnQuit(fn func()) (off func()) { return a.onQuit.add(fn, false) }
 
+// OnSaveState has fn give what the app needs to come back as it was, called on
+// the main thread as a phone's app goes to the background, where the system may
+// end it without a word. The next launch finds it in RestoredState. Keep it
+// small: it is written before the app may do no more. Desktops never call it.
+func (a *Application) OnSaveState(fn func() []byte) { a.saveState = fn }
+
+// RestoredState returns what OnSaveState gave as the system ended the app in
+// the background, nil after any other way of ending: Android tells when the user
+// meant to leave, and iOS keeps it unless the user force-quit.
+func (a *Application) RestoredState() []byte { return restoredState() }
+
 // OnMemoryWarning is called on the main thread when the system is short of
 // memory: let go of what can be made again, as caches. Phones end apps that
 // keep too much; desktops do not report it. Native UI drops its own caches
@@ -677,7 +689,12 @@ func (appHandler) ThemeChanged() {
 func (appHandler) MemoryWarning()                { fire(&App.onMemoryWarning) }
 func (appHandler) DisplaysChanged()              { Screen.changed() }
 func (appHandler) LocaleChanged()                { App.localeChangedFromSystem() }
-func (appHandler) PowerEvent(event string)       { Power.event(event) }
+func (appHandler) PowerEvent(event string) {
+	if event == "suspend" {
+		App.writeState()
+	}
+	Power.event(event)
+}
 func (appHandler) HotkeyPressed(id int)          { GlobalShortcut.pressed(id) }
 func (appHandler) NotificationClicked(id string) { notificationClicked(id) }
 

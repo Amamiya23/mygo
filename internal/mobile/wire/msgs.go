@@ -174,6 +174,7 @@ type AppInfoReply struct {
 	System        string
 	SystemVersion string
 	Model         string
+	Restoring     bool
 }
 
 func (m *AppInfoReply) Decode(r *Reader) {
@@ -192,6 +193,7 @@ func (m *AppInfoReply) Decode(r *Reader) {
 	m.System = r.String()
 	m.SystemVersion = r.String()
 	m.Model = r.String()
+	m.Restoring = r.Bool()
 }
 
 // Theme is the appearance and the accessibility preferences.

@@ -58,6 +58,8 @@ object HostImpl : HostCalls {
         private set
     val windows = HashMap<Long, HostWindow>()
     private var started = false
+    /** Whether Android made the Activity again after ending the process. */
+    var restoring = false
 
     // What covers the screen's edges, in pixels: the system's bars and
     // the cutout, and the keyboard.
@@ -188,6 +190,7 @@ object HostImpl : HostCalls {
         r.system = "Android"
         r.systemVersion = Build.VERSION.RELEASE
         r.model = Build.MODEL
+        r.restoring = restoring
         return r
     }
 

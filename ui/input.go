@@ -36,8 +36,11 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 	if rt.insp.pointer(rt, ev, x, y) {
 		return true
 	}
-	if ev.Touch && touchInput != nil && touchInput(rt, ev, x, y) {
-		return false
+	if ev.Touch && touchInput != nil {
+		x, y = rt.aimTouch(ev.Kind, x, y)
+		if touchInput(rt, ev, x, y) {
+			return false
+		}
 	}
 	switch ev.Kind {
 	case platform.PointerMove, platform.PointerDown, platform.PointerUp, platform.PointerScroll, platform.PointerZoom:

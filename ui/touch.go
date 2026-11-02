@@ -136,6 +136,8 @@ type touchPan struct {
 	dragging bool
 	// edge says it swipes back from the screen's edge.
 	edge bool
+	// aimX and aimY are how far from the finger what it took is (aimTouch).
+	aimX, aimY float32
 	// textBefore is the input with the focus as it went down, and selBefore
 	// its selection then.
 	textBefore uint64
@@ -165,7 +167,7 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 	t := &rt.touch
 	switch ev.Kind {
 	case platform.PointerDown:
-		*t = touchPan{down: true, x0: x, y0: y, lx: x, ly: y, at: rt.now()}
+		*t = touchPan{down: true, x0: x, y0: y, lx: x, ly: y, at: rt.now(), aimX: t.aimX, aimY: t.aimY}
 		t.sample(rt.now(), x, y)
 		rt.catchBounces()
 		if h := rt.handleAt(x, y); h != handleNone {
@@ -311,6 +313,53 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		return true
 	}
 	return false
+}
+
+// touchReach is how far from a finger's center, in DIPs, it takes what it
+// nearly touches: fingers are wide, and a slider's thumb or a small button
+// narrower, as UIKit's hit test and Android's touch delegates allow for.
+const touchReach = 14
+
+// aimTouch returns where a finger is for the elements: a finger going down
+// on nothing takes the nearest thing that takes presses within touchReach, and
+// stays that far from where it is until it lifts.
+func (rt *engine) aimTouch(kind platform.SurfaceEventKind, x, y float32) (float32, float32) {
+	t := &rt.touch
+	if kind == platform.PointerDown {
+		t.aimX, t.aimY = rt.nearestPressable(x, y)
+	} else if !t.down && kind != platform.PointerUp {
+		t.aimX, t.aimY = 0, 0
+	}
+	return x + t.aimX, y + t.aimY
+}
+
+// nearestPressable returns how far from x, y the nearest thing that takes
+// presses is, within touchReach: nothing when something under it does, or what
+// scrolls would take the finger.
+func (rt *engine) nearestPressable(x, y float32) (dx, dy float32) {
+	takes := func(px, py float32) bool {
+		for _, id := range rt.hitChain(px, py) {
+			s := rt.states[id]
+			if s == nil || s.flags&flagDisabled != 0 {
+				continue
+			}
+			return s.flags&interactive != 0
+		}
+		return false
+	}
+	if takes(x, y) {
+		return 0, 0
+	}
+	for _, r := range [...]float32{touchReach / 2, touchReach} {
+		for i := range 8 {
+			sin, cos := math.Sincos(float64(i) * math.Pi / 4)
+			px, py := r*float32(cos), r*float32(sin)
+			if takes(x+px, y+py) {
+				return px, py
+			}
+		}
+	}
+	return 0, 0
 }
 
 // afterTap notes what a finger's tap did to a text input.

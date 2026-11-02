@@ -541,3 +541,30 @@ func TestTouchEdgeSwipeNowhere(t *testing.T) {
 	}
 	tt.TouchUp(30, 200)
 }
+
+// A finger nearly on a small button takes it; one on nothing does nothing, and
+// one between two buttons takes the one under it.
+func TestTouchReach(t *testing.T) {
+	clicks := 0
+	tt := coreNewTester(func(c *context) {
+		coreBox(c).Fill().Children(func() {
+			if coreBox(c).Absolute().Left(100).Top(100).Size(20, 20).Clicked() {
+				clicks++
+			}
+		})
+	}, 300, 300)
+	tt.Frame()
+	tt.TouchDown(95, 110)
+	tt.TouchUp(95, 110)
+	tt.Frame()
+	if clicks != 1 {
+		t.Errorf("nearly on it: %d clicks", clicks)
+	}
+	tt.Advance(time.Second)
+	tt.TouchDown(50, 50)
+	tt.TouchUp(50, 50)
+	tt.Frame()
+	if clicks != 1 {
+		t.Errorf("far from it: %d clicks", clicks)
+	}
+}

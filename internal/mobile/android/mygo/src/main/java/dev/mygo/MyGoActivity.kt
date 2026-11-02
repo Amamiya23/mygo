@@ -19,6 +19,7 @@ class MyGoActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         lastConfig = Configuration(resources.configuration)
+        HostImpl.restoring = HostImpl.restoring || savedInstanceState != null
         HostImpl.attach(this)
         HostImpl.applyBars()
         val back = object : OnBackPressedCallback(false) {

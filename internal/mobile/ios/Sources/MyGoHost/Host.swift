@@ -43,6 +43,9 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
         r.system = UIDevice.current.systemName
         r.systemVersion = UIDevice.current.systemVersion
         r.model = UIDevice.current.model
+        // iOS does not say: what the app kept goes if it was force-quit, which
+        // the system tells by the scene's session not coming back.
+        r.restoring = true
         return r
     }
 

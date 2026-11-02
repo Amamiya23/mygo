@@ -81,6 +81,7 @@ public struct AppInfoReply {
     public var system: String = ""
     public var systemVersion: String = ""
     public var model: String = ""
+    public var restoring: Bool = false
     public init() {}
     func encode(_ w: inout WireWriter) {
         w.string(name)
@@ -98,6 +99,7 @@ public struct AppInfoReply {
         w.string(system)
         w.string(systemVersion)
         w.string(model)
+        w.bool(restoring)
     }
 }
 

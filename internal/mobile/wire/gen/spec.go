@@ -26,7 +26,7 @@ var calls = []msg{
 		f("FilesDir", "string"), f("CacheDir", "string"), f("TempDir", "string"), f("DocumentsDir", "string"),
 		f("ResourcesDir", "string"),
 		f("Languages", "strings"), f("RegionLocale", "string"), f("FirstWeekday", "int"), f("HourCycle", "int"),
-		f("System", "string"), f("SystemVersion", "string"), f("Model", "string"),
+		f("System", "string"), f("SystemVersion", "string"), f("Model", "string"), f("Restoring", "bool"),
 	}},
 	{name: "Theme", doc: "the appearance and the accessibility preferences", wait: true, reply: []field{
 		f("Dark", "bool"), f("Accent", "int"), f("ReduceMotion", "bool"), f("ReduceTransparency", "bool"),

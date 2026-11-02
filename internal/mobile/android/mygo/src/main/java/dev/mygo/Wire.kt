@@ -102,6 +102,7 @@ class AppInfoReply(
     @JvmField var system: String = "",
     @JvmField var systemVersion: String = "",
     @JvmField var model: String = "",
+    @JvmField var restoring: Boolean = false,
 ) {
     fun encode(w: WireWriter) {
         w.string(name)
@@ -119,6 +120,7 @@ class AppInfoReply(
         w.string(system)
         w.string(systemVersion)
         w.string(model)
+        w.bool(restoring)
     }
 }
 
