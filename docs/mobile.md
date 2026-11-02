@@ -44,6 +44,18 @@ works as on the desktop: the simulator reaches the Mac's dev server.
 through `adb reverse`, at the same URL. Without `devUrl`, the app embeds
 `frontendDist`, as a device cannot read the computer's disk.
 
+A change of the Go code takes about two seconds: the host's Swift stays
+compiled and the new executable goes into the installed app on iOS, and on
+Android the new library goes to the debuggable app without Gradle. A change of
+the host, a plugin, the resources or the configuration builds and installs the
+whole app again.
+
+Restarting loses what the app holds in memory. An app that gives
+`App.OnSaveState` what it needs, which it should for the system ending it in the
+background anyway, finds it in `App.RestoredState` as it comes back: under `mygo
+dev`, on desktops too, it is kept every second, and development restarts where
+it was.
+
 The development app is "<name> Dev" with the identifier
 "<identifier>.dev", as on the desktop, so it installs beside the release.
 
