@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/surface"
 )
 
 // NativePlugin is a plugin's native code on phones: the Swift and Kotlin it
@@ -81,6 +82,66 @@ func (p *NativePlugin) Call(ctx context.Context, method string, args, reply any)
 		return nil
 	}
 	return json.Unmarshal(r.data, reply)
+}
+
+// PluginView is a view of a plugin's native code, which a window's native UI
+// shows with ui.WebView, under what it paints over it, as it does a web view:
+// a map, a camera's preview, a video.
+type PluginView struct {
+	w    *Window
+	view platform.WebView
+	// ID names the view to the plugin's native code: pass it with the calls
+	// about the view.
+	ID int
+}
+
+// NewPluginView makes a view of a type a plugin's native code registered
+// (PluginHost.registerView), with its arguments as JSON, in a window showing
+// native UI. Phones only: elsewhere it reports errors.ErrUnsupported.
+func NewPluginView(w *Window, viewType string, args any) (*PluginView, error) {
+	needsApp("NewPluginView")
+	raw := []byte("{}")
+	if args != nil {
+		b, err := json.Marshal(args)
+		if err != nil {
+			return nil, err
+		}
+		raw = b
+	}
+	var v *PluginView
+	err := errNoContent
+	onMain(func() {
+		if w.native == nil || w.conn == nil {
+			return
+		}
+		s, ok := w.conn.Surface.(platform.PluginViewSurface)
+		if !ok {
+			err = errors.ErrUnsupported
+			return
+		}
+		nv, e := s.NewPluginView(viewType, raw, &windowHandler{w})
+		if err = e; err != nil {
+			return
+		}
+		id := 0
+		if h, ok := nv.(interface{ ViewID() int }); ok {
+			id = h.ViewID()
+		}
+		v = &PluginView{w: w, view: nv, ID: id}
+	})
+	return v, err
+}
+
+// Destroy closes the view.
+func (v *PluginView) Destroy() { onMain(v.view.Close) }
+
+// SurfaceWebView gives package ui the view to place, in its window's content
+// only. Main thread only.
+func (v *PluginView) SurfaceWebView(conn *surface.Conn) platform.WebView {
+	if v == nil || conn.Window != v.w {
+		return nil
+	}
+	return v.view
 }
 
 // nativeEvents holds who hears plugins' native code.

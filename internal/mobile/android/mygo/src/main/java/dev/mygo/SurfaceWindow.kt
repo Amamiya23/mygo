@@ -34,7 +34,11 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
     /** The window's number, which views' own id would shadow. */
     private val wid: Long = id
     private val surface = Surface(context)
-    override val view: View get() = surface
+    /** The surface, and under it the views it holds. */
+    private val box = android.widget.FrameLayout(context).apply {
+        addView(surface, android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+    override val view: View get() = box
     private var native = 0L
     private var framePending = false
     private val frame = Choreographer.FrameCallback {
@@ -53,7 +57,102 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
     // A SurfaceView's background would draw over its surface, hiding the
     // frames: the page around it takes the color.
     override fun setBackground(argb: Int) {
-        (surface.parent as? View)?.setBackgroundColor(argb)
+        box.setBackgroundColor(argb)
+    }
+
+    /** A view the surface holds, in a view that clips it. */
+    private class Held(val window: HostWindow, val clip: android.widget.FrameLayout) {
+        var box = Rect()
+        var covers = emptyList<Rect>()
+        fun takes(x: Int, y: Int) = clip.visibility == View.VISIBLE && box.contains(x, y) && covers.none { it.contains(x, y) }
+    }
+
+    private val held = ArrayList<Held>()
+
+    /**
+     * Holds a view under the surface, whose frames are transparent where the
+     * content shows it: the surface goes over the window, which it does only as
+     * it is made, so it is made again the first time.
+     */
+    fun hold(w: HostWindow) {
+        w.holder = this
+        (w.view.parent as? android.view.ViewGroup)?.removeView(w.view)
+        val clip = android.widget.FrameLayout(context)
+        clip.clipChildren = true
+        clip.visibility = View.GONE
+        clip.addView(w.view, android.widget.FrameLayout.LayoutParams(0, 0))
+        box.addView(clip, 0, android.widget.FrameLayout.LayoutParams(0, 0))
+        if (held.isEmpty()) {
+            // Not now: Go waits for this call, and the surface going waits
+            // for Go.
+            box.post {
+                surface.setZOrderOnTop(true)
+                surface.holder.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
+                box.removeView(surface)
+                box.addView(surface, android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT))
+            }
+        }
+        held.add(Held(w, clip))
+    }
+
+    fun release(w: HostWindow) {
+        val i = held.indexOfFirst { it.window === w }
+        if (i < 0) return
+        box.removeView(held[i].clip)
+        held.removeAt(i)
+    }
+
+    fun placeViews(places: ByteArray) {
+        val r = WireReader(places)
+        val d = density
+        fun rect(): Rect {
+            val x = r.float()
+            val y = r.float()
+            val w = r.float()
+            val h = r.float()
+            return Rect((x * d).toInt(), (y * d).toInt(), ((x + w) * d).toInt(), ((y + h) * d).toInt())
+        }
+        val shown = HashSet<Held>()
+        var order = 0
+        while (!r.done()) {
+            val id = r.int()
+            val frame = rect()
+            val clip = rect()
+            val covers = List(r.int().toInt()) { rect() }
+            val h = held.firstOrNull { it.window.id == id } ?: continue
+            val lp = h.clip.layoutParams as android.widget.FrameLayout.LayoutParams
+            lp.leftMargin = clip.left
+            lp.topMargin = clip.top
+            lp.width = clip.width()
+            lp.height = clip.height()
+            h.clip.layoutParams = lp
+            val vp = h.window.view.layoutParams as android.widget.FrameLayout.LayoutParams
+            vp.leftMargin = frame.left - clip.left
+            vp.topMargin = frame.top - clip.top
+            vp.width = frame.width()
+            vp.height = frame.height()
+            h.window.view.layoutParams = vp
+            h.window.view.post { h.window.reportSize() }
+            h.box = clip
+            h.covers = covers
+            h.clip.visibility = View.VISIBLE
+            if (box.indexOfChild(h.clip) != order) {
+                box.removeView(h.clip)
+                box.addView(h.clip, order)
+            }
+            order++
+            shown.add(h)
+        }
+        for (h in held) if (h !in shown) h.clip.visibility = View.GONE
+    }
+
+    /** A finger going down on a view it holds, which gets it: the content hears of it. */
+    private fun heldTakes(e: MotionEvent): Boolean {
+        val x = e.x.toInt()
+        val y = e.y.toInt()
+        if (held.asReversed().none { it.takes(x, y) }) return false
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) Go.send(Event.viewPressed(wid, e.x / density, e.y / density))
+        return true
     }
 
     fun requestFrame() {
@@ -203,6 +302,12 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
         }
 
         override fun surfaceDestroyed(h: SurfaceHolder) = releaseNative()
+
+        // A finger on a view it holds passes through to it, under this view.
+        override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+            if (e.actionMasked == MotionEvent.ACTION_DOWN && heldTakes(e)) return false
+            return super.dispatchTouchEvent(e)
+        }
 
         override fun onTouchEvent(e: MotionEvent): Boolean {
             val d = density

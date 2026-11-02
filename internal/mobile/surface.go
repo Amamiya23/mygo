@@ -195,12 +195,49 @@ func (s *surface) ShowMagnifier(x, y float64) {
 
 func (s *surface) HideMagnifier() { s.w.b.call(&wire.HideMagnifier{ID: s.w.id}, nil) }
 
-func (s *surface) StartDataDrag(platform.DragRequest)        {}
-func (s *surface) CancelDataDrag()                           {}
-func (s *surface) SetDropFormats([]transfer.Format)          {}
-func (s *surface) PlaceWebViews([]platform.WebViewPlacement) {}
-func (s *surface) NewWebView(*platform.WindowOptions, platform.WindowHandler) (platform.WebView, error) {
-	return nil, platform.ErrUnsupported
+func (s *surface) StartDataDrag(platform.DragRequest) {}
+func (s *surface) CancelDataDrag()                    {}
+func (s *surface) SetDropFormats([]transfer.Format)   {}
+
+// NewWebView makes a web view the host holds under the surface, hidden until
+// PlaceWebViews shows it.
+func (s *surface) NewWebView(o *platform.WindowOptions, h platform.WindowHandler) (platform.WebView, error) {
+	return s.w.b.makeWindow(o, h, s.w, "", "")
+}
+
+// NewPluginView makes a view of a plugin's native code, under the surface as a
+// web view is (platform.PluginViewSurface).
+func (s *surface) NewPluginView(viewType string, args []byte, h platform.WindowHandler) (platform.WebView, error) {
+	o := &platform.WindowOptions{}
+	return s.w.b.makeWindow(o, h, s.w, viewType, string(args))
+}
+
+// PlaceWebViews shows the views the surface holds where the content shows
+// them; the frames are transparent there, and the host routes fingers to them
+// but where the content painted over them.
+func (s *surface) PlaceWebViews(views []platform.WebViewPlacement) {
+	var w wire.Writer
+	for _, p := range views {
+		v, ok := p.WebView.(*window)
+		if !ok || v.closed {
+			continue
+		}
+		w.Int(v.id)
+		for _, r := range []platform.RectF{p.Frame, p.Clip} {
+			w.Float(r.X)
+			w.Float(r.Y)
+			w.Float(r.W)
+			w.Float(r.H)
+		}
+		w.Int(len(p.Covers))
+		for _, r := range p.Covers {
+			w.Float(r.X)
+			w.Float(r.Y)
+			w.Float(r.W)
+			w.Float(r.H)
+		}
+	}
+	s.w.b.call(&wire.PlaceViews{ID: s.w.id, Places: w.Buf}, nil)
 }
 
 // touch turns a finger, a pen or a mouse into pointer events: the first
@@ -463,6 +500,12 @@ func (b *Backend) handleSurface(op uint64, r *wire.Reader, w *wire.Writer) bool 
 			reply.Handled = s.send(platform.SurfaceEvent{Kind: kind, Key: k, PhysicalKey: k, Mods: platform.Modifiers(e.Mods), Repeat: e.Repeated})
 		}
 		reply.Encode(w)
+	case wire.EventViewPressed:
+		var e wire.ViewPressedEvent
+		e.Decode(r)
+		if s := sf(e.ID); s != nil {
+			s.send(platform.SurfaceEvent{Kind: platform.WebViewPress, X: e.X, Y: e.Y})
+		}
 	case wire.EventTextReplace, wire.EventTextMark, wire.EventTextUnmark, wire.EventTextDelete, wire.EventTextSelect,
 		wire.EventTextCommand, wire.EventTextState, wire.EventTextRange, wire.EventTextBounds, wire.EventTextIndexAt, wire.EventTextInputEnded:
 		b.textEvent(op, r, w)

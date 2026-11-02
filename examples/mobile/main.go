@@ -39,8 +39,10 @@ type app struct {
 	nextRow int
 
 	// Pages.
-	pages mobile.PageState
-	zoom  mobile.ZoomState
+	web      *mygo.WebView
+	overPage int
+	pages    mobile.PageState
+	zoom     mobile.ZoomState
 
 	// Keyboards.
 	email, password, code, phone, url, amount, search, notes string
@@ -52,7 +54,9 @@ type app struct {
 	results map[string]string
 }
 
-func heading(c *ui.Context, s string) { ui.Text(c, s).FontSize(13).TextColor(c.Theme().TextMuted).PaddingX(16).Padding(16, 16, 4, 16) }
+func heading(c *ui.Context, s string) {
+	ui.Text(c, s).FontSize(13).TextColor(c.Theme().TextMuted).PaddingX(16).Padding(16, 16, 4, 16)
+}
 
 func (a *app) widgets(c *ui.Context) {
 	t := c.Theme()
@@ -162,15 +166,38 @@ func (a *app) lists(c *ui.Context) {
 	})
 }
 
+const webPage = `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
+<style>body{font:16px system-ui;margin:12px;background:#fef3c7}button{font-size:16px;padding:8px 12px}</style>
+<h3 style="margin:0 0 8px">A web page</h3><button onclick="this.textContent='Tapped '+(++n)">Tap the page</button>
+<input placeholder="Type here" style="font-size:16px;margin-left:8px;width:110px"><script>var n=0</script>`
+
 var pageColors = []ui.Color{ui.Hex("#2563eb"), ui.Hex("#16a34a"), ui.Hex("#d97706"), ui.Hex("#db2777")}
 
 func (a *app) pagesView(c *ui.Context) {
 	ui.Column(c).Fill().Children(func() {
+		if a.web == nil {
+			v, err := a.win.NewWebView(mygo.WebViewOptions{})
+			if err == nil {
+				v.Page().LoadHTML(webPage, "")
+				a.web = v
+			}
+		}
+		if a.web != nil {
+			// A web page among native UI, and native UI over it.
+			ui.Box(c).Height(160).Shrink(0).FillWidth().Children(func() {
+				ui.WebView(c, a.web).Fill()
+				b := ui.Text(c, fmt.Sprintf("Native over the page: %d", a.overPage)).Absolute().Right(8).Bottom(8).Padding(6, 10).Radius(8).
+					Background(c.Theme().Accent).TextColor(c.Theme().AccentText).FontSize(13)
+				if b.Clicked() {
+					a.overPage++
+				}
+			})
+		}
 		mobile.PageView(c, &a.pages, len(pageColors), func(i int) {
 			ui.Box(c).Fill().Background(pageColors[i]).Center().Children(func() {
 				ui.Textf(c, "Page %d", i+1).FontSize(32).Bold().TextColor(ui.RGB(255, 255, 255))
 			})
-		}).Height(220).Shrink(0)
+		}).Height(140).Shrink(0)
 		mobile.PageDots(c, a.pages.Page, len(pageColors))
 		heading(c, "Pinch to zoom, double tap, drag")
 		mobile.Zoomable(c, &a.zoom, mobile.ZoomOptions{}, func() {

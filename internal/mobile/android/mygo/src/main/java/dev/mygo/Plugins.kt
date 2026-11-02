@@ -35,7 +35,19 @@ object PluginHost {
     private val onResults = HashMap<Int, (Int, Intent?) -> Unit>()
     private val onPermissions = HashMap<Int, (Boolean) -> Unit>()
 
+    private val viewMakers = HashMap<String, (Context, Long, JSONObject) -> android.view.View>()
+
     fun register(id: String, plugin: MyGoPlugin) { plugins[id] = plugin }
+
+    /** Registers a type of view that mygo.NewPluginView makes: make gets the number that calls about the view name it, and the arguments. */
+    fun registerView(type: String, make: (context: Context, id: Long, args: JSONObject) -> android.view.View) {
+        viewMakers[type] = make
+    }
+
+    internal fun makeView(type: String, context: Context, id: Long, args: String): android.view.View? {
+        val a = (if (args.isEmpty()) null else runCatching { JSONTokener(args).nextValue() as? JSONObject }.getOrNull()) ?: JSONObject()
+        return viewMakers[type]?.invoke(context, id, a)
+    }
 
     /** The app's context, which outlives Activities. */
     val context: Context get() = HostImpl.app
@@ -125,4 +137,9 @@ object PluginHost {
             reply.failure(PluginFailure("Exception", e.toString()))
         }
     }
+}
+
+/** A window showing a plugin's view, which a surface holds. */
+internal class PluginViewWindow(context: Context, id: Long, override val view: android.view.View) : HostWindow(context, id) {
+    override fun setBackground(argb: Int) = view.setBackgroundColor(argb)
 }

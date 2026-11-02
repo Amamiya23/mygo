@@ -43,7 +43,21 @@ public enum ApplicationEvent {
 public enum PluginHost {
     private static var plugins: [String: MyGoPlugin] = [:]
 
+    private static var viewMakers: [String: (Int, [String: Any]) -> UIView] = [:]
+
     public static func register(_ id: String, _ plugin: MyGoPlugin) { plugins[id] = plugin }
+
+    /// Registers a type of view that mygo.NewPluginView makes: make gets the
+    /// number that calls about the view name it, and the arguments.
+    public static func registerView(_ type: String, _ make: @escaping (_ id: Int, _ args: [String: Any]) -> UIView) {
+        viewMakers[type] = make
+    }
+
+    static func makeView(_ type: String, id: Int, args: String) -> UIView? {
+        var a: [String: Any] = [:]
+        if let d = args.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] { a = o }
+        return viewMakers[type]?(id, a)
+    }
 
     /// The view controller to present over.
     public static var presenter: UIViewController { Host.shared.presenter }
@@ -92,4 +106,16 @@ public enum PluginHost {
             }
         }
     }
+}
+
+/// A window showing a plugin's view, which a surface holds.
+final class PluginViewWindow: HostWindow {
+    init(id: Int, view: UIView) {
+        super.init(id: id)
+        view.frame = bounds
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(view)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
 }

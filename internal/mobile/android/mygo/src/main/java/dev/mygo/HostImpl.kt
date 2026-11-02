@@ -217,17 +217,25 @@ object HostImpl : HostCalls {
     override fun createWindow(c: CreateWindowCall): CreateWindowReply {
         val r = CreateWindowReply()
         try {
-            val w = if (c.surface) SurfaceWindow(context, c.id) else WebWindow(context, c)
+            val w = when {
+                c.surface -> SurfaceWindow(context, c.id)
+                c.viewType.isNotEmpty() -> PluginViewWindow(context, c.id, PluginHost.makeView(c.viewType, context, c.id, c.viewArgs)
+                    ?: throw IllegalArgumentException("no view ${c.viewType} in this app"))
+                else -> WebWindow(context, c)
+            }
             if (c.hasBackground) {
                 w.fill = rgbaToARGB(c.background)
                 w.setBackground(w.fill)
             }
             windows[c.id] = w
+            if (c.parent != 0L) surface(c.parent)?.hold(w)
         } catch (e: Throwable) {
             r.error = "mygo: ${e.message ?: e.toString()}"
         }
         return r
     }
+
+    override fun placeViews(c: PlaceViewsCall) { surface(c.id)?.placeViews(c.places) }
 
     override fun showWindow(c: ShowWindowCall) {
         val w = windows[c.id] ?: return
@@ -242,6 +250,12 @@ object HostImpl : HostCalls {
 
     override fun closeWindow(c: CloseWindowCall) {
         val w = windows.remove(c.id) ?: return
+        val holder = w.holder
+        if (holder != null) {
+            holder.release(w)
+            w.close()
+            return
+        }
         Navigation.hide(w)
         Navigation.forget(w)
         w.close()

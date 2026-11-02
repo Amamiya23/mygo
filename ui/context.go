@@ -1,8 +1,8 @@
 package ui
 
 import (
-	"github.com/egoist/mygo/internal/platform"
 	"fmt"
+	"github.com/egoist/mygo/internal/platform"
 	"hash/maphash"
 	"reflect"
 	"time"
@@ -713,8 +713,8 @@ type state struct {
 	// longPress says the element asks for long presses (LongPressed), and
 	// longPressed that a finger held it since the last frame.
 	longPress, longPressed bool
-	contentW         float64
-	contentH         float64
+	contentW               float64
+	contentH               float64
 	// barInset is the element's ScrollbarInsets, and barWidth the width
 	// of its scroll bars, its theme's ScrollbarWidth.
 	barInset [4]float32

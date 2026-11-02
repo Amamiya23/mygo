@@ -62,6 +62,10 @@ type window struct {
 	insets               platform.Insets
 	keyboard             float64
 	barItems             []platform.BarItem
+	// parent is the surface's window this one shows under, as a web view in
+	// native UI, and children those it holds.
+	parent   *window
+	children []*window
 }
 
 // scriptsOf encodes user scripts as CreateWindow and SetUserScripts take
@@ -83,8 +87,14 @@ func scriptsOf(scripts []platform.UserScript) (src, flags []string) {
 }
 
 func (b *Backend) newWindow(opts *platform.WindowOptions, h platform.WindowHandler) (*window, error) {
+	return b.makeWindow(opts, h, nil, "", "")
+}
+
+// makeWindow makes a window, within parent if any: a web view, or with a
+// viewType a plugin's native view.
+func (b *Backend) makeWindow(opts *platform.WindowOptions, h platform.WindowHandler, parent *window, viewType, viewArgs string) (*window, error) {
 	b.nextID++
-	w := &window{b: b, id: b.nextID, h: h, opts: *opts, title: opts.Title, zoom: 1, scale: 1}
+	w := &window{b: b, id: b.nextID, h: h, opts: *opts, title: opts.Title, zoom: 1, scale: 1, parent: parent}
 	if opts.Zoom > 0 {
 		w.zoom = opts.Zoom
 	}
@@ -93,6 +103,11 @@ func (b *Backend) newWindow(opts *platform.WindowOptions, h platform.WindowHandl
 		ID: w.id, Surface: opts.Surface, Schemes: opts.Schemes, Scripts: src, ScriptFlags: flags,
 		UserAgent: opts.UserAgent, UserAgentSuffix: opts.UserAgentSuffix, Inspectable: opts.DevTools,
 		Autoplay: opts.Autoplay, SwipeNavigation: opts.SwipeNavigation, PinchZoom: opts.PinchZoom,
+		ViewType: viewType, ViewArgs: viewArgs,
+	}
+	if parent != nil {
+		c.Parent = parent.id
+		parent.children = append(parent.children, w)
 	}
 	if opts.BackgroundColor != nil {
 		c.Background, c.HasBackground = rgba(*opts.BackgroundColor), true
@@ -140,6 +155,10 @@ func (b *Backend) refocus(old *window) {
 }
 
 func (w *window) Handle() uintptr { return uintptr(w.id) }
+
+// ViewID is the number the host knows the window by, which a plugin's native
+// code knows its views by.
+func (w *window) ViewID() int { return w.id }
 
 func (w *window) Surface() platform.Surface {
 	if w.s == nil {
@@ -249,7 +268,7 @@ func (w *window) Hide() {
 func (w *window) IsVisible() bool { return w.visible }
 
 func (w *window) Focus() {
-	if w.visible && w.b.front() != w {
+	if w.parent == nil && w.visible && w.b.front() != w {
 		w.Show()
 	}
 	w.b.call(&wire.Focus{ID: w.id}, nil)
@@ -267,6 +286,17 @@ func (w *window) Close() {
 	if w.closed {
 		return
 	}
+	for _, c := range append([]*window(nil), w.children...) {
+		c.Close()
+	}
+	if p := w.parent; p != nil {
+		// A web view: its handler hears no more of it.
+		p.children = slices.DeleteFunc(p.children, func(c *window) bool { return c == w })
+		w.closed = true
+		w.b.call(&wire.CloseWindow{ID: w.id}, nil)
+		delete(w.b.windows, w.id)
+		return
+	}
 	old := w.b.front()
 	w.b.unshow(w)
 	w.closed, w.visible = true, false
@@ -278,6 +308,10 @@ func (w *window) Close() {
 	w.b.refocus(old)
 	w.h.Closed()
 }
+
+// TabInto gives a web view the keyboard: phones' keyboards have no Tab to
+// come in with.
+func (w *window) TabInto(bool) { w.b.call(&wire.Focus{ID: w.id}, nil) }
 
 // resized takes the size the host reported.
 func (w *window) resized(e *wire.ResizedEvent) {

@@ -10,76 +10,77 @@ const (
 	CallScreen                 = 4
 	CallLog                    = 5
 	CallCreateWindow           = 6
-	CallShowWindow             = 7
-	CallHideWindow             = 8
-	CallCloseWindow            = 9
-	CallSetBackground          = 10
-	CallFocus                  = 11
-	CallSetTitle               = 12
-	CallCreateTabs             = 13
-	CallAddTab                 = 14
-	CallShowTabs               = 15
-	CallSelectTab              = 16
-	CallSetTabBadge            = 17
-	CallCloseTabs              = 18
-	CallPushWindow             = 19
-	CallPopWindow              = 20
-	CallLoadURL                = 21
-	CallLoadHTML               = 22
-	CallReload                 = 23
-	CallStopLoading            = 24
-	CallGoBack                 = 25
-	CallGoForward              = 26
-	CallEval                   = 27
-	CallCallAsync              = 28
-	CallSetZoom                = 29
-	CallSetUserAgent           = 30
-	CallSetUserScripts         = 31
-	CallCapturePage            = 32
-	CallUserAgent              = 33
-	CallSchemeRespond          = 34
-	CallSchemeData             = 35
-	CallSchemeFinish           = 36
-	CallSchemeFail             = 37
-	CallMessageBox             = 38
-	CallOpenFiles              = 39
-	CallShareFile              = 40
-	CallClipboardText          = 41
-	CallSetClipboardText       = 42
-	CallOpenURL                = 43
-	CallSecretGet              = 44
-	CallSecretSet              = 45
-	CallSecretDelete           = 46
-	CallNotify                 = 47
-	CallRemoveNotification     = 48
-	CallRemoveAllNotifications = 49
-	CallKeepAwake              = 50
-	CallNetworkStatus          = 51
-	CallWatchNetwork           = 52
-	CallBattery                = 53
-	CallSetSystemBars          = 54
-	CallSetOrientations        = 55
-	CallShare                  = 56
-	CallSaveFile               = 57
-	CallClipboardImage         = 58
-	CallSetClipboardImage      = 59
-	CallPopupMenu              = 60
-	CallSetBarItems            = 61
-	CallPluginCall             = 62
-	CallHaptic                 = 63
-	CallRequestFrame           = 64
-	CallSetTextInput           = 65
-	CallSetCursor              = 66
-	CallAccessibilityChanged   = 67
-	CallAnnounce               = 68
-	CallShowMenu               = 69
-	CallShowMagnifier          = 70
-	CallHideMagnifier          = 71
-	CallTextMetrics            = 72
-	CallMeasureText            = 73
-	CallTextAdvances           = 74
-	CallDrawText               = 75
-	CallRegisterFont           = 76
+	CallPlaceViews             = 7
+	CallShowWindow             = 8
+	CallHideWindow             = 9
+	CallCloseWindow            = 10
+	CallSetBackground          = 11
+	CallFocus                  = 12
+	CallSetTitle               = 13
+	CallCreateTabs             = 14
+	CallAddTab                 = 15
+	CallShowTabs               = 16
+	CallSelectTab              = 17
+	CallSetTabBadge            = 18
+	CallCloseTabs              = 19
+	CallPushWindow             = 20
+	CallPopWindow              = 21
+	CallLoadURL                = 22
+	CallLoadHTML               = 23
+	CallReload                 = 24
+	CallStopLoading            = 25
+	CallGoBack                 = 26
+	CallGoForward              = 27
+	CallEval                   = 28
+	CallCallAsync              = 29
+	CallSetZoom                = 30
+	CallSetUserAgent           = 31
+	CallSetUserScripts         = 32
+	CallCapturePage            = 33
+	CallUserAgent              = 34
+	CallSchemeRespond          = 35
+	CallSchemeData             = 36
+	CallSchemeFinish           = 37
+	CallSchemeFail             = 38
+	CallMessageBox             = 39
+	CallOpenFiles              = 40
+	CallShareFile              = 41
+	CallClipboardText          = 42
+	CallSetClipboardText       = 43
+	CallOpenURL                = 44
+	CallSecretGet              = 45
+	CallSecretSet              = 46
+	CallSecretDelete           = 47
+	CallNotify                 = 48
+	CallRemoveNotification     = 49
+	CallRemoveAllNotifications = 50
+	CallKeepAwake              = 51
+	CallNetworkStatus          = 52
+	CallWatchNetwork           = 53
+	CallBattery                = 54
+	CallSetSystemBars          = 55
+	CallSetOrientations        = 56
+	CallShare                  = 57
+	CallSaveFile               = 58
+	CallClipboardImage         = 59
+	CallSetClipboardImage      = 60
+	CallPopupMenu              = 61
+	CallSetBarItems            = 62
+	CallPluginCall             = 63
+	CallHaptic                 = 64
+	CallRequestFrame           = 65
+	CallSetTextInput           = 66
+	CallSetCursor              = 67
+	CallAccessibilityChanged   = 68
+	CallAnnounce               = 69
+	CallShowMenu               = 70
+	CallShowMagnifier          = 71
+	CallHideMagnifier          = 72
+	CallTextMetrics            = 73
+	CallMeasureText            = 74
+	CallTextAdvances           = 75
+	CallDrawText               = 76
+	CallRegisterFont           = 77
 )
 
 // Numbers of events.
@@ -93,53 +94,54 @@ const (
 	EventMemoryWarning       = 7
 	EventTerminating         = 8
 	EventResized             = 9
-	EventPluginResult        = 10
-	EventPluginEvent         = 11
-	EventNetworkChanged      = 12
-	EventShareResult         = 13
-	EventMenuPicked          = 14
-	EventBarItemClicked      = 15
-	EventTabSelected         = 16
-	EventPopped              = 17
-	EventBackPressed         = 18
-	EventMessage             = 19
-	EventWillNavigate        = 20
-	EventNewWindow           = 21
-	EventPageState           = 22
-	EventNavigationStarted   = 23
-	EventNavigationCommitted = 24
-	EventLoadFinished        = 25
-	EventLoadFailed          = 26
-	EventClosedByPage        = 27
-	EventProcessGone         = 28
-	EventPermissionRequested = 29
-	EventSchemeRequest       = 30
-	EventSchemeCancel        = 31
-	EventAsyncResult         = 32
-	EventCaptured            = 33
-	EventMessageBoxResult    = 34
-	EventFilesResult         = 35
-	EventNotifyDone          = 36
-	EventNotificationClicked = 37
-	EventFrame               = 38
-	EventSurfaceChanged      = 39
-	EventSurfaceDestroyed    = 40
-	EventTouch               = 41
-	EventScroll              = 42
-	EventKey                 = 43
-	EventTextReplace         = 44
-	EventTextMark            = 45
-	EventTextUnmark          = 46
-	EventTextDelete          = 47
-	EventTextSelect          = 48
-	EventTextCommand         = 49
-	EventTextState           = 50
-	EventTextRange           = 51
-	EventTextBounds          = 52
-	EventTextIndexAt         = 53
-	EventTextInputEnded      = 54
-	EventAccessibilityTree   = 55
-	EventAccessibilityAction = 56
+	EventViewPressed         = 10
+	EventPluginResult        = 11
+	EventPluginEvent         = 12
+	EventNetworkChanged      = 13
+	EventShareResult         = 14
+	EventMenuPicked          = 15
+	EventBarItemClicked      = 16
+	EventTabSelected         = 17
+	EventPopped              = 18
+	EventBackPressed         = 19
+	EventMessage             = 20
+	EventWillNavigate        = 21
+	EventNewWindow           = 22
+	EventPageState           = 23
+	EventNavigationStarted   = 24
+	EventNavigationCommitted = 25
+	EventLoadFinished        = 26
+	EventLoadFailed          = 27
+	EventClosedByPage        = 28
+	EventProcessGone         = 29
+	EventPermissionRequested = 30
+	EventSchemeRequest       = 31
+	EventSchemeCancel        = 32
+	EventAsyncResult         = 33
+	EventCaptured            = 34
+	EventMessageBoxResult    = 35
+	EventFilesResult         = 36
+	EventNotifyDone          = 37
+	EventNotificationClicked = 38
+	EventFrame               = 39
+	EventSurfaceChanged      = 40
+	EventSurfaceDestroyed    = 41
+	EventTouch               = 42
+	EventScroll              = 43
+	EventKey                 = 44
+	EventTextReplace         = 45
+	EventTextMark            = 46
+	EventTextUnmark          = 47
+	EventTextDelete          = 48
+	EventTextSelect          = 49
+	EventTextCommand         = 50
+	EventTextState           = 51
+	EventTextRange           = 52
+	EventTextBounds          = 53
+	EventTextIndexAt         = 54
+	EventTextInputEnded      = 55
+	EventAccessibilityTree   = 56
+	EventAccessibilityAction = 57
 )
 
 // AppInfo is the app's bundle and the system's settings, asked once at start.
@@ -284,6 +286,9 @@ type CreateWindow struct {
 	Autoplay        bool
 	SwipeNavigation bool
 	PinchZoom       bool
+	Parent          int
+	ViewType        string
+	ViewArgs        string
 }
 
 func (m *CreateWindow) Encode(w *Writer) {
@@ -301,6 +306,9 @@ func (m *CreateWindow) Encode(w *Writer) {
 	w.Bool(m.Autoplay)
 	w.Bool(m.SwipeNavigation)
 	w.Bool(m.PinchZoom)
+	w.Int(m.Parent)
+	w.String(m.ViewType)
+	w.String(m.ViewArgs)
 }
 
 // Wait reports whether the caller waits for the host to run it.
@@ -315,6 +323,21 @@ func (m *CreateWindowReply) Decode(r *Reader) {
 	m.Error = r.String()
 	m.Layer = r.Int()
 }
+
+// PlaceViews is where a surface shows the windows it holds (Parent), under it, in the order painted; the others hide. Places: encoded by Go (encodePlaces).
+type PlaceViews struct {
+	ID     int
+	Places []byte
+}
+
+func (m *PlaceViews) Encode(w *Writer) {
+	w.Uvarint(CallPlaceViews)
+	w.Int(m.ID)
+	w.Bytes(m.Places)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*PlaceViews) Wait() bool { return false }
 
 type ShowWindow struct {
 	ID int
@@ -1640,6 +1663,19 @@ func (m *ResizedEvent) Decode(r *Reader) {
 	m.SafeBottom = r.Float()
 	m.SafeRight = r.Float()
 	m.Keyboard = r.Float()
+}
+
+// ViewPressedEvent is a finger went down on a view a surface holds, which takes it.
+type ViewPressedEvent struct {
+	ID int
+	X  float64
+	Y  float64
+}
+
+func (m *ViewPressedEvent) Decode(r *Reader) {
+	m.ID = r.Int()
+	m.X = r.Float()
+	m.Y = r.Float()
 }
 
 type PluginResultEvent struct {

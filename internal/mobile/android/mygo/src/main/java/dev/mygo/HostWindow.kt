@@ -12,6 +12,8 @@ abstract class HostWindow(val context: Context, val id: Long) {
     private var last: DoubleArray? = null
     /** The color the window's content fills it with, 0 while unknown. */
     var fill = 0
+    /** The surface showing this window under it, as a web view in native UI. */
+    var holder: SurfaceWindow? = null
 
     /**
      * What covers the window, in pixels: the system's bars and the cutout
@@ -49,7 +51,7 @@ abstract class HostWindow(val context: Context, val id: Long) {
         val d = HostImpl.density.toDouble()
         val w = if (view.width > 0) view.width else root.width
         val h = if (view.height > 0) view.height else root.height
-        val c = covered()
+        val c = if (holder != null) IntArray(5) else covered()
         val size = doubleArrayOf(w / d, h / d, d, c[0] / d, c[1] / d, c[2] / d, c[3] / d, c[4] / d)
         if (last?.contentEquals(size) == true) return
         last = size

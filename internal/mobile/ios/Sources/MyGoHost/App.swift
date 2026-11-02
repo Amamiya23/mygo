@@ -205,6 +205,8 @@ final class RootViewController: UIViewController {
 /// native UI.
 class HostWindow: UIView {
     let id: Int
+    /// The surface showing this window under it, as a web view in native UI.
+    weak var holder: SurfaceWindow?
     private var lastSize: [Double] = []
 
     init(id: Int) {
@@ -217,7 +219,7 @@ class HostWindow: UIView {
 
     /// Tells Go the window's size and what covers it, when they changed.
     func reportSize() {
-        let s = safeAreaInsets
+        let s = holder == nil ? safeAreaInsets : .zero
         let scale = window?.screen.scale ?? traitCollection.displayScale
         let size = [Double(bounds.width), Double(bounds.height), Double(scale), Double(s.top), Double(s.left),
                     Double(s.bottom), Double(s.right), Double(Host.shared.root.keyboard)]

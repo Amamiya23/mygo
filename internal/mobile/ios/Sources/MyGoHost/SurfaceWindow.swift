@@ -71,6 +71,88 @@ final class SurfaceWindow: HostWindow, UITextInput {
         Go.send(Event.frame(id: id))
     }
 
+    // The views it holds, as web views: under its layer, whose frames are
+    // transparent where the content shows them, each in a view that clips it.
+
+    private final class Held {
+        let window: HostWindow
+        let clip = UIView()
+        var box = CGRect.zero
+        var covers: [CGRect] = []
+        init(_ w: HostWindow) { window = w }
+
+        func takes(_ p: CGPoint) -> Bool {
+            !clip.isHidden && box.contains(p) && !covers.contains { $0.contains(p) }
+        }
+    }
+
+    private var held: [Held] = []
+    /// What holds them, below the layer Go's renderer adds to this view's.
+    private lazy var underlay: UIView = {
+        let v = UIView(frame: bounds)
+        v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        v.layer.zPosition = -1
+        insertSubview(v, at: 0)
+        return v
+    }()
+
+    func hold(_ w: HostWindow) {
+        w.holder = self
+        w.autoresizingMask = []
+        let h = Held(w)
+        h.clip.clipsToBounds = true
+        h.clip.isHidden = true
+        h.clip.addSubview(w)
+        underlay.addSubview(h.clip)
+        held.append(h)
+    }
+
+    func release(_ w: HostWindow) {
+        guard let i = held.firstIndex(where: { $0.window === w }) else { return }
+        held[i].clip.removeFromSuperview()
+        held.remove(at: i)
+    }
+
+    func placeViews(_ places: [UInt8]) {
+        var shown: [Held] = []
+        places.withUnsafeBytes { buf in
+            var r = WireReader(buf)
+            while r.at < buf.count {
+                let id = r.int()
+                let frame = CGRect(x: r.float(), y: r.float(), width: r.float(), height: r.float())
+                let clip = CGRect(x: r.float(), y: r.float(), width: r.float(), height: r.float())
+                var covers: [CGRect] = []
+                for _ in 0..<r.int() { covers.append(CGRect(x: r.float(), y: r.float(), width: r.float(), height: r.float())) }
+                guard let h = held.first(where: { $0.window.id == id }) else { continue }
+                h.clip.frame = clip
+                h.window.frame = frame.offsetBy(dx: -clip.minX, dy: -clip.minY)
+                h.window.reportSize()
+                h.box = clip
+                h.covers = covers
+                h.clip.isHidden = false
+                underlay.bringSubviewToFront(h.clip)
+                shown.append(h)
+            }
+        }
+        for h in held where !shown.contains(where: { $0 === h }) { h.clip.isHidden = true }
+    }
+
+    private var pressedAt: TimeInterval = -1
+
+    // A finger on a view it holds goes to the view, which the content hears
+    // of, as it closes what a press outside closes.
+    override func hitTest(_ p: CGPoint, with e: UIEvent?) -> UIView? {
+        guard self.point(inside: p, with: e) else { return nil }
+        for h in held.reversed() where h.takes(p) {
+            if let t = e?.timestamp, t != pressedAt {
+                pressedAt = t
+                Go.send(Event.viewPressed(id: id, x: Double(p.x), y: Double(p.y)))
+            }
+            return h.window.hitTest(convert(p, to: h.window), with: e) ?? h.window
+        }
+        return self
+    }
+
     // Fingers.
 
     private func send(_ touches: Set<UITouch>, _ phase: String) {

@@ -165,6 +165,14 @@ type TouchSurface interface {
 	HideMagnifier()
 }
 
+// PluginViewSurface is a Surface that holds native views of plugins' native
+// code, as it does web views: under it, where its frames leave holes. The
+// WebView of one has no page: only its place, its keyboard and Close do
+// anything.
+type PluginViewSurface interface {
+	NewPluginView(viewType string, args []byte, h WindowHandler) (WebView, error)
+}
+
 // IdleSurface is a Surface that can give back memory once frames stop.
 type IdleSurface interface {
 	// Idle tells that no frame came for a while: the surface may give

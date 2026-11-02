@@ -83,13 +83,22 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
             let s = SurfaceWindow(id: c.id)
             r.layer = Int(bitPattern: Unmanaged.passUnretained(s.layer).toOpaque())
             w = s
+        } else if !c.viewType.isEmpty {
+            guard let v = PluginHost.makeView(c.viewType, id: c.id, args: c.viewArgs) else {
+                r.error = "mygo: no view \(c.viewType) in this app"
+                return r
+            }
+            w = PluginViewWindow(id: c.id, view: v)
         } else {
             w = WebWindow(id: c.id, c)
         }
         if c.hasBackground { w.setBackground(UIColor(rgba: c.background)) }
         windows[c.id] = w
+        if c.parent != 0 { surface(c.parent)?.hold(w) }
         return r
     }
+
+    func placeViews(_ c: PlaceViewsCall) { surface(c.id)?.placeViews(c.places) }
 
     func showWindow(_ c: ShowWindowCall) {
         guard let w = windows[c.id] else { return }
@@ -104,6 +113,11 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
 
     func closeWindow(_ c: CloseWindowCall) {
         guard let w = windows.removeValue(forKey: c.id) else { return }
+        if let holder = w.holder {
+            holder.release(w)
+            w.close()
+            return
+        }
         Navigation.shared.hide(w)
         Navigation.shared.forget(w)
         w.close()
