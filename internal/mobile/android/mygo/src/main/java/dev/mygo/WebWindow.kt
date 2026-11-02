@@ -283,6 +283,19 @@ class WebWindow(context: Context, c: CreateWindowCall) : HostWindow(context, c.i
             a.requestPermissions(need.toTypedArray(), ASK_MEDIA)
         }
 
+        // navigator.geolocation: the app's handler says, then the system's
+        // permission, which the app's manifest declares.
+        override fun onGeolocationPermissionsShowPrompt(origin: String, callback: android.webkit.GeolocationPermissions.Callback) {
+            val reply = Go.ask(Event.permissionRequested(id, listOf("geolocation"), origin))
+            if (reply == null || !PermissionRequestedReply(reply).allow) {
+                callback.invoke(origin, false, false)
+                return
+            }
+            PluginHost.requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) {
+                callback.invoke(origin, it, false)
+            }
+        }
+
         override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
             val a = HostImpl.activity ?: return false
             fileCallback?.onReceiveValue(null)
