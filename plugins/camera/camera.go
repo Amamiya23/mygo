@@ -41,7 +41,9 @@ func New(w *mygo.Window, o Options) (*Camera, error) {
 }
 
 // SurfaceWebView gives package ui the view to show.
-func (c *Camera) SurfaceWebView(conn *surface.Conn) platform.WebView { return c.view.SurfaceWebView(conn) }
+func (c *Camera) SurfaceWebView(conn *surface.Conn) platform.WebView {
+	return c.view.SurfaceWebView(conn)
+}
 
 // TakePhoto takes a photo and returns the path of its JPEG in the app's
 // temporary directory.

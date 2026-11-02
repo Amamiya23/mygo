@@ -97,7 +97,9 @@ func New(w *mygo.Window, source string, o Options) (*Player, error) {
 }
 
 // SurfaceWebView gives package ui the view to show.
-func (p *Player) SurfaceWebView(conn *surface.Conn) platform.WebView { return p.view.SurfaceWebView(conn) }
+func (p *Player) SurfaceWebView(conn *surface.Conn) platform.WebView {
+	return p.view.SurfaceWebView(conn)
+}
 
 // State tells what the player last told of its video.
 func (p *Player) State() State {

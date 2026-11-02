@@ -18,7 +18,6 @@ type rawCall struct {
 func (c rawCall) Encode(w *wire.Writer) { w.Buf = append(w.Buf, c.id) }
 func (c rawCall) Wait() bool            { return c.reply }
 
-
 // loopHost hears the calls the test's UI thread runs.
 type loopHost struct {
 	onCall func(id byte)

@@ -469,7 +469,7 @@ type SurfaceEvent struct {
 	// Scale is PointerZoom's, and Rotation the radians clockwise two fingers
 	// turned since the last, on touch screens.
 	Scale, Rotation float64
-	Key   Key
+	Key             Key
 	// PhysicalKey is the key by its position on an ANSI US keyboard,
 	// whatever the active layout types; KeyUnknown where the backend does
 	// not report it. Key and PhysicalKey agree on a US layout.

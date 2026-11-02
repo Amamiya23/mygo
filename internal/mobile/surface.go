@@ -46,9 +46,9 @@ type surface struct {
 	textSent wire.SetTextInput
 	// textSerial counts the inputs that took the keyboard.
 	textSerial int
-	marked   string
-	access   *platform.AccessTree
-	accessOn bool
+	marked     string
+	access     *platform.AccessTree
+	accessOn   bool
 }
 
 func newSurface(w *window) *surface {
