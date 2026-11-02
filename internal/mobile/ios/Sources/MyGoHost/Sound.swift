@@ -57,7 +57,12 @@ final class Sound {
                 right[i] = s[2 * i + 1]
             }
         }
-        room.wait()
+        // An engine that stopped, as for a phone call, plays nothing more and
+        // frees no room: the output opens it again.
+        if !engine.isRunning || room.wait(timeout: .now() + 1) == .timedOut {
+            r.error = "audio: the engine stopped"
+            return r
+        }
         player.scheduleBuffer(b) { room.signal() }
         return r
     }

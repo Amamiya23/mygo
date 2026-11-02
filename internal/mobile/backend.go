@@ -51,8 +51,9 @@ type Backend struct {
 	woken    atomic.Bool
 	quit     atomic.Bool
 
-	mu     sync.Mutex
-	events []event
+	mu      sync.Mutex
+	events  []event
+	stopped bool
 
 	// Main thread only.
 	windows map[int]*window
@@ -171,7 +172,23 @@ func (b *Backend) Run() error {
 		<-b.notify
 		b.handleAll()
 	}
+	b.stopEvents()
 	return nil
+}
+
+// stopEvents answers what the host waits for, and all it will send: with the
+// core's loop gone, no one would, and the UI thread would hang in it.
+func (b *Backend) stopEvents() {
+	b.mu.Lock()
+	b.stopped = true
+	events := b.events
+	b.events = nil
+	b.mu.Unlock()
+	for _, e := range events {
+		if e.done != nil {
+			e.done <- nil
+		}
+	}
 }
 
 // postReady tells the core the app is ready once the loop runs, as the
@@ -286,6 +303,10 @@ func deliver(msg []byte, onUI bool) []byte {
 	}
 	done := make(chan []byte, 1)
 	b.mu.Lock()
+	if b.stopped {
+		b.mu.Unlock()
+		return nil
+	}
 	b.events = append(b.events, event{msg: msg, done: done})
 	b.mu.Unlock()
 	b.wakeLoop()

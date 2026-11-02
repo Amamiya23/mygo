@@ -86,19 +86,20 @@ func (t *transport) call(m message, reply interface{ Decode(*wire.Reader) }) {
 // drain runs the calls sent so far. UI thread only.
 func (t *transport) drain() {
 	for {
+		// One at a time: a call may wait for Go (wait), which runs the calls
+		// after it meanwhile, one of which Go may be waiting for.
 		t.mu.Lock()
-		t.posted = false
-		reqs := t.pending
-		t.pending = nil
-		t.mu.Unlock()
-		if len(reqs) == 0 {
+		if len(t.pending) == 0 {
+			t.posted = false
+			t.mu.Unlock()
 			return
 		}
-		for _, r := range reqs {
-			b := t.h.call(r.msg)
-			if r.reply != nil {
-				r.reply <- b
-			}
+		r := t.pending[0]
+		t.pending = t.pending[1:]
+		t.mu.Unlock()
+		b := t.h.call(r.msg)
+		if r.reply != nil {
+			r.reply <- b
 		}
 	}
 }
@@ -112,7 +113,15 @@ func (t *transport) wait(done chan []byte) []byte {
 	defer func() {
 		t.mu.Lock()
 		t.waiting--
+		// A call that came as it stopped waiting only kicked it.
+		post := t.waiting == 0 && len(t.pending) > 0 && !t.posted
+		if post {
+			t.posted = true
+		}
 		t.mu.Unlock()
+		if post {
+			t.h.post()
+		}
 	}()
 	for {
 		t.drain()

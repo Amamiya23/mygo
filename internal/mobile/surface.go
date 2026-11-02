@@ -26,6 +26,8 @@ type surface struct {
 	// deferred is a frame the app in the background did not draw.
 	deferred bool
 	cursor   platform.Cursor
+	// mouseButton is the button of a mouse that went down.
+	mouseButton int
 
 	// The fingers on the screen, by the host's numbers: the first is the
 	// pointer, two pinch.
@@ -42,6 +44,8 @@ type surface struct {
 
 	text     platform.TextInputState
 	textSent wire.SetTextInput
+	// textSerial counts the inputs that took the keyboard.
+	textSerial int
 	marked   string
 	access   *platform.AccessTree
 	accessOn bool
@@ -203,7 +207,8 @@ func (s *surface) UpdateAccessibility(tree *platform.AccessTree) {
 	if !changed {
 		for i := range tree.Nodes {
 			a, b := &old.Nodes[i], &tree.Nodes[i]
-			if a.ID != b.ID || a.Label != b.Label || a.Value != b.Value || a.Bounds != b.Bounds || a.States != b.States {
+			if a.ID != b.ID || a.Label != b.Label || a.Value != b.Value || a.Bounds != b.Bounds || a.States != b.States ||
+				a.Now != b.Now || a.Min != b.Min || a.Max != b.Max || a.Actions != b.Actions || a.Description != b.Description {
 				changed = true
 				break
 			}
@@ -349,7 +354,7 @@ func (s *surface) touch(e *wire.TouchEvent) {
 // what it pressed.
 func (s *surface) cancel() {
 	s.touching = false
-	s.send(platform.SurfaceEvent{Kind: platform.PointerUp, X: -1e6, Y: -1e6, Touch: true})
+	s.send(platform.SurfaceEvent{Kind: platform.PointerUp, X: -1e6, Y: -1e6, Touch: true, Canceled: true})
 	s.send(platform.SurfaceEvent{Kind: platform.PointerLeave, Touch: true})
 	s.taps = 0
 }
@@ -422,9 +427,11 @@ func (s *surface) mouse(e *wire.TouchEvent) {
 	}
 	switch e.Phase {
 	case "down":
+		s.mouseButton = button
 		s.send(platform.SurfaceEvent{Kind: platform.PointerDown, X: e.X, Y: e.Y, Button: button, Clicks: 1})
 	case "up":
-		s.send(platform.SurfaceEvent{Kind: platform.PointerUp, X: e.X, Y: e.Y, Button: button, Clicks: 1})
+		// The one that went down: a release tells of none held any more.
+		s.send(platform.SurfaceEvent{Kind: platform.PointerUp, X: e.X, Y: e.Y, Button: s.mouseButton, Clicks: 1})
 	case "cancel":
 		s.send(platform.SurfaceEvent{Kind: platform.PointerLeave})
 	default:

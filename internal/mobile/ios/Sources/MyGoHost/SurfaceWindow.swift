@@ -22,6 +22,7 @@ final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate
     private var editing = false
     private var hasDocument = false
     private var shows = 0
+    private var serial = 0
 
     // The input's traits, which the keyboard reads as it shows.
     var keyboardType: UIKeyboardType = .default
@@ -229,7 +230,18 @@ final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate
         }
     }
 
-    override func touchesBegan(_ t: Set<UITouch>, with e: UIEvent?) { send(t, "down") }
+    override func touchesBegan(_ t: Set<UITouch>, with e: UIEvent?) {
+        // A finger whose end UIKit never told of, as the view left the window
+        // under it, would turn every later one into a pinch.
+        if let all = e?.allTouches {
+            let live = Set(all.map { ObjectIdentifier($0) })
+            for (key, n) in fingers where !live.contains(key) {
+                Go.send(Event.touch(id: id, pointer: n, phase: "cancel", kind: "touch", x: 0, y: 0, pressure: 0, buttons: 0, time: CACurrentMediaTime()))
+                fingers[key] = nil
+            }
+        }
+        send(t, "down")
+    }
     override func touchesMoved(_ t: Set<UITouch>, with e: UIEvent?) { send(t, "move") }
     override func touchesEnded(_ t: Set<UITouch>, with e: UIEvent?) { send(t, "up") }
     override func touchesCancelled(_ t: Set<UITouch>, with e: UIEvent?) { send(t, "cancel") }
@@ -279,6 +291,8 @@ final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate
     func setTextInput(_ c: SetTextInputCall) {
         let wasEditing = editing
         editing = c.active
+        let another = c.serial != serial
+        serial = c.serial
         hasDocument = c.document
         caret = CGRect(x: c.x, y: c.y, width: max(c.width, 2), height: max(c.height, 1))
         let traitsChanged = setTraits(c)
@@ -293,7 +307,7 @@ final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate
             becomeFirstResponder()
         } else if !editing && wasEditing && isFirstResponder {
             resignFirstResponder()
-        } else if editing && traitsChanged {
+        } else if editing && (traitsChanged || another) {
             reloadInputViews()
         }
         shows = c.show

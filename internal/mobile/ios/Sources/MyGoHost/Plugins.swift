@@ -61,6 +61,8 @@ public enum PluginHost {
 
     /// The view controller to present over.
     public static var presenter: UIViewController { Host.shared.presenter }
+    /// Presents a view controller, once the one on screen stops going away.
+    public static func present(_ vc: UIViewController) { Host.shared.present(vc) }
     /// The window showing the app.
     public static var window: UIWindow? { Host.shared.window }
 
@@ -80,8 +82,9 @@ public enum PluginHost {
         if JSONSerialization.isValidJSONObject(v), let d = try? JSONSerialization.data(withJSONObject: v) {
             return String(decoding: d, as: UTF8.self)
         }
-        // Scalars, which JSONSerialization takes only inside something.
-        if let d = try? JSONSerialization.data(withJSONObject: [v]), d.count >= 2 {
+        // Scalars, which JSONSerialization takes only inside something. What
+        // it can't encode it raises for, which Swift cannot catch.
+        if JSONSerialization.isValidJSONObject([v]), let d = try? JSONSerialization.data(withJSONObject: [v]), d.count >= 2 {
             return String(decoding: d[1..<(d.count - 1)], as: UTF8.self)
         }
         return "null"

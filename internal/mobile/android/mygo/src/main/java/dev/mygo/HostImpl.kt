@@ -68,9 +68,7 @@ object HostImpl : HostCalls {
     var ime = androidx.core.graphics.Insets.NONE
         private set
 
-    private const val PICK_FILES = 0x6d79
     private const val ASK_NOTIFICATIONS = 0x6d7a
-    private var pickReq = 0L
     private var pendingNotes = ArrayList<NotifyCall>()
 
     fun attach(a: Activity) {
@@ -403,7 +401,8 @@ object HostImpl : HostCalls {
             Go.send(Event.filesResult(c.req, emptyList(), ""))
             return
         }
-        pickReq = c.req
+        val code = nextResultCode()
+        picks[code] = c.req
         val intent = if (c.directories) {
             Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
         } else {
@@ -416,19 +415,17 @@ object HostImpl : HostCalls {
             }
         }
         @Suppress("DEPRECATION")
-        a.startActivityForResult(intent, PICK_FILES)
+        a.startActivityForResult(intent, code)
     }
 
     fun activityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (PluginHost.activityResult(requestCode, resultCode, data)) return
-        if (requestCode == SAVE_FILE) {
-            val req = saveReq
+        saves.remove(requestCode)?.let { (req, from) ->
             val uri = data?.data
             if (resultCode != Activity.RESULT_OK || uri == null) {
                 Go.send(Event.filesResult(req, emptyList(), ""))
                 return
             }
-            val from = savePath
             Thread {
                 try {
                     app.contentResolver.openOutputStream(uri)!!.use { out -> File(from).inputStream().use { it.copyTo(out) } }
@@ -439,8 +436,8 @@ object HostImpl : HostCalls {
             }.start()
             return
         }
-        if (requestCode == PICK_FILES) {
-            val req = pickReq
+        val req = picks.remove(requestCode)
+        if (req != null) {
             if (resultCode != Activity.RESULT_OK || data == null) {
                 Go.send(Event.filesResult(req, emptyList(), ""))
                 return
@@ -691,21 +688,28 @@ object HostImpl : HostCalls {
         }
     }
 
-    private const val SAVE_FILE = 0x6d7b
-    private var saveReq = 0L
-    private var savePath = ""
+    // What the pickers on screen answer, by their request codes: one tapped
+    // twice opens two, each answering its own.
+    private val picks = HashMap<Int, Long>()
+    private val saves = HashMap<Int, Pair<Long, String>>()
+    private var lastResultCode = 0
+
+    private fun nextResultCode(): Int {
+        lastResultCode = (lastResultCode + 1) and 0xff
+        return 0x6e00 + lastResultCode
+    }
 
     override fun saveFile(c: SaveFileCall) {
         val a = activity ?: run {
             Go.send(Event.filesResult(c.req, emptyList(), "mygo: no window to save from"))
             return
         }
-        saveReq = c.req
-        savePath = c.path
+        val code = nextResultCode()
+        saves[code] = Pair(c.req, c.path)
         val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(File(c.name).extension.lowercase()) ?: "application/octet-stream"
         val i = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, c.name)
         @Suppress("DEPRECATION")
-        a.startActivityForResult(i, SAVE_FILE)
+        a.startActivityForResult(i, code)
     }
 
     override fun clipboardImage(): ClipboardImageReply {

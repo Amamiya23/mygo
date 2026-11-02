@@ -122,8 +122,14 @@ object PluginHost {
         val reply = object : PluginReply {
             override fun success(result: Any?) {
                 if (answered) return
+                val text = try {
+                    encode(result)
+                } catch (e: Exception) {
+                    failure(PluginFailure("Encoding", e.toString()))
+                    return
+                }
                 answered = true
-                Go.send(Event.pluginResult(c.req, encode(result), "", ""))
+                Go.send(Event.pluginResult(c.req, text, "", ""))
             }
             override fun failure(error: PluginFailure) {
                 if (answered) return

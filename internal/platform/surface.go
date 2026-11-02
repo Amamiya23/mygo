@@ -492,6 +492,9 @@ type SurfaceEvent struct {
 	Action AccessActionKind
 	// WebView is WebViewTabOut's.
 	WebView WebView
+	// Canceled marks a PointerUp of a finger the system took away, as a second
+	// finger or its own gesture does: it clicks nothing and throws nothing.
+	Canceled bool
 	// Touch marks pointer events of a finger on a touch screen, which
 	// has no hover: a drag of one pans what scrolls under it, and no
 	// pointer stays over the content after it lifts.

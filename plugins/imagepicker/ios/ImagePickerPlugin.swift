@@ -20,7 +20,7 @@ final class ImagePickerPlugin: NSObject, MyGoPlugin, PHPickerViewControllerDeleg
             cfg.selectionLimit = limit < 0 ? 0 : limit
             let vc = PHPickerViewController(configuration: cfg)
             vc.delegate = self
-            PluginHost.presenter.present(vc, animated: true)
+            PluginHost.present(vc)
         case "capture":
             guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
                 reply(.failure(PluginFailure("NoCamera", "the device has no camera")))
@@ -30,7 +30,7 @@ final class ImagePickerPlugin: NSObject, MyGoPlugin, PHPickerViewControllerDeleg
             let vc = UIImagePickerController()
             vc.sourceType = .camera
             vc.delegate = self
-            PluginHost.presenter.present(vc, animated: true)
+            PluginHost.present(vc)
         default:
             reply(.failure(PluginFailure("NoMethod", method)))
         }

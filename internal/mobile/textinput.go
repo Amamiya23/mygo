@@ -33,6 +33,9 @@ func (s *surface) SetTextInput(t platform.TextInputState) {
 	if !t.Active && s.text.Active {
 		s.marked = ""
 	}
+	if t.Client != s.text.Client {
+		s.textSerial++ // another input: keyboards forget what they knew
+	}
 	s.text = t
 	s.syncText()
 }
@@ -41,7 +44,7 @@ func (s *surface) SetTextInput(t platform.TextInputState) {
 func (s *surface) syncText() {
 	t := s.text
 	st := s.snapshot()
-	m := wire.SetTextInput{ID: s.w.id, Active: t.Active, Show: int(t.ShowKeyboard), Document: t.Client != nil,
+	m := wire.SetTextInput{ID: s.w.id, Active: t.Active, Show: int(t.ShowKeyboard), Serial: s.textSerial, Document: t.Client != nil,
 		X: st.X, Y: st.Y, Width: st.Width, Height: st.Height,
 		Multiline: t.Traits.Multiline, Secure: t.Traits.Secure, Keyboard: keyboardNames[t.Traits.Keyboard], ReturnKey: returnNames[t.Traits.ReturnKey],
 		Capitalize: capitalizeNames[t.Traits.Capitalize], Autocorrect: autocorrectNames[t.Traits.Autocorrect], Autofill: autofillNames[t.Traits.Autofill],
@@ -82,7 +85,10 @@ func (s *surface) snapshot() wire.TextStateReply {
 // typed hands the keyboard's text to the content without a document, or a
 // new line or a tab as its key, which submits a field or moves the focus.
 func (s *surface) typed(text string) {
-	s.marked = ""
+	if s.marked != "" {
+		s.marked = ""
+		s.send(platform.SurfaceEvent{Kind: platform.TextComposition})
+	}
 	s.send(platform.SurfaceEvent{Kind: platform.TextInput, Text: text})
 }
 
@@ -209,7 +215,7 @@ func (b *Backend) textEvent(op uint64, r *wire.Reader, w *wire.Writer) {
 				c.SetMarkedText(rangeOf(e.HasRange, e.Start, e.End), e.Text, platform.TextRange{Start: e.SelStart, End: e.SelEnd})
 			} else {
 				s.marked = e.Text
-				s.send(platform.SurfaceEvent{Kind: platform.TextComposition, Text: e.Text, Caret: e.SelEnd})
+				s.send(platform.SurfaceEvent{Kind: platform.TextComposition, Text: e.Text, Caret: platform.RunesInUTF16(e.Text, e.SelEnd)})
 			}
 		}
 		state(s)

@@ -138,7 +138,7 @@ var calls = []msg{
 	// Native UI.
 	{name: "RequestFrame", doc: "asks for a Frame at the next refresh of the display", args: []field{f("ID", "int")}},
 	{name: "SetTextInput", doc: "whether the keyboard shows and what for: the input's traits (platform.TextTraits), and its text. Show counts the requests to show the keyboard again. Offsets are UTF-16 units of the document, of which Text is the part around the selection, from Base; MarkStart is -1 without marked text. A window without Document takes text without one, as a terminal: the keyboard sees none",
-		args: []field{f("ID", "int"), f("Active", "bool"), f("Show", "int"), f("X", "float"), f("Y", "float"), f("Width", "float"), f("Height", "float"),
+		args: []field{f("ID", "int"), f("Active", "bool"), f("Show", "int"), f("Serial", "int"), f("X", "float"), f("Y", "float"), f("Width", "float"), f("Height", "float"),
 			f("Document", "bool"), f("Multiline", "bool"), f("Secure", "bool"), f("Keyboard", "string"), f("ReturnKey", "string"),
 			f("Capitalize", "string"), f("Autocorrect", "string"), f("Autofill", "string"),
 			f("Text", "string"), f("Base", "int"), f("Length", "int"), f("SelStart", "int"), f("SelEnd", "int"), f("MarkStart", "int"), f("MarkEnd", "int")}},
@@ -180,7 +180,7 @@ var events = []msg{
 	{name: "LocaleChanged"},
 	{name: "OpenURLs", args: []field{f("URLs", "strings")}},
 	{name: "MemoryWarning"},
-	{name: "Terminating"},
+	{name: "Terminating", doc: "the process ends once Go answers", wait: true},
 
 	{name: "Resized", doc: "the window's size in DIPs, the scale, and the insets of what covers it: the system's bars, the cutout, the keyboard",
 		args: []field{f("ID", "int"), f("Width", "float"), f("Height", "float"), f("Scale", "float"),

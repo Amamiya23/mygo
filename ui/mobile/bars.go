@@ -194,11 +194,13 @@ func Drawer(c *ui.Context, open *bool, o DrawerOptions, content func()) {
 			c.AnimationFrame()
 		case !*open:
 			st.offset = ui.Point{X: gone}
+			st.opened = false
 		case !st.opened:
 			st.opened = true
 			st.offset = ui.Point{}
 		case st.offset.X == gone && !panel.Dragging():
 			*open = false // dragged away
+			st.opened = false
 		}
 		shown := panel.DragOffset().X
 		frac := 1 - abs(shown)/width

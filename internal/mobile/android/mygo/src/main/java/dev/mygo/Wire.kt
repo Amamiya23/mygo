@@ -907,6 +907,7 @@ class SetTextInputCall(
     @JvmField var id: Long = 0L,
     @JvmField var active: Boolean = false,
     @JvmField var show: Long = 0L,
+    @JvmField var serial: Long = 0L,
     @JvmField var x: Double = 0.0,
     @JvmField var y: Double = 0.0,
     @JvmField var width: Double = 0.0,
@@ -931,6 +932,7 @@ class SetTextInputCall(
         id = r.int()
         active = r.bool()
         show = r.int()
+        serial = r.int()
         x = r.float()
         y = r.float()
         width = r.float()
@@ -1429,6 +1431,7 @@ object Event {
         w.uvarint(7)
         return w.toByteArray()
     }
+    /** the process ends once Go answers */
     @JvmStatic fun terminating(): ByteArray {
         val w = WireWriter()
         w.uvarint(8)
@@ -1877,6 +1880,11 @@ object Event {
 }
 
 class BackgroundReply() {
+    constructor(r: WireReader) : this() {
+    }
+}
+
+class TerminatingReply() {
     constructor(r: WireReader) : this() {
     }
 }

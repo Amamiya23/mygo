@@ -168,7 +168,7 @@ final class WebWindow: HostWindow, WKNavigationDelegate, WKUIDelegate {
                  completionHandler: @escaping () -> Void) {
         let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""), style: .default) { _ in completionHandler() })
-        Host.shared.presenter.present(a, animated: true)
+        Host.shared.present(a)
     }
 
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo,
@@ -176,7 +176,7 @@ final class WebWindow: HostWindow, WKNavigationDelegate, WKUIDelegate {
         let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: NSLocalizedString("Cancel", comment: ""), style: .cancel) { _ in completionHandler(false) })
         a.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""), style: .default) { _ in completionHandler(true) })
-        Host.shared.presenter.present(a, animated: true)
+        Host.shared.present(a)
     }
 
     func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
@@ -187,7 +187,7 @@ final class WebWindow: HostWindow, WKNavigationDelegate, WKUIDelegate {
         a.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""), style: .default) { _ in
             completionHandler(a.textFields?.first?.text ?? "")
         })
-        Host.shared.presenter.present(a, animated: true)
+        Host.shared.present(a)
     }
 
     func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo,

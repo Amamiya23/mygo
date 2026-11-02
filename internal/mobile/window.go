@@ -62,6 +62,9 @@ type window struct {
 	insets               platform.Insets
 	keyboard             float64
 	barItems             []platform.BarItem
+	// tabs is the bar of tabs the window is on, in tab tabIndex.
+	tabs     *tabBar
+	tabIndex int
 	// parent is the surface's window this one shows under, as a web view in
 	// native UI, and children those it holds.
 	parent   *window

@@ -186,7 +186,7 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
         val traits = was.multiline != c.multiline || was.secure != c.secure || was.keyboard != c.keyboard || was.returnKey != c.returnKey ||
             was.capitalize != c.capitalize || was.autocorrect != c.autocorrect || was.autofill != c.autofill
         when {
-            c.active && (!was.active || traits) -> {
+            c.active && (!was.active || traits || c.serial != was.serial) -> {
                 surface.requestFocus()
                 imm.restartInput(surface)
                 imm.showSoftInput(surface, 0)

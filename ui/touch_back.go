@@ -89,10 +89,19 @@ func (rt *engine) endEdgeSwipe(speed float32) {
 }
 
 // commitSwipe goes back, the slide going on from where the gesture left it.
-func (r *Router) commitSwipe() {
+func (r *Router) commitSwipe() { r.Back() }
+
+// endSwipe ends a gesture as the history moves: the slide goes on from where
+// the gesture left the page.
+func (r *Router) endSwipe() {
+	if !r.swiping && !r.settling {
+		return
+	}
 	r.resume = r.swipe
 	r.swipe, r.swiping, r.settling = 0, false, false
-	r.Back()
+	if r.rt != nil && r.rt.swipeRouter == r {
+		r.rt.swipeRouter = nil
+	}
 }
 
 // giveUpSwipe sends the page back over the one before.
@@ -136,17 +145,24 @@ func (rt *engine) backGesture(phase string, progress float32) {
 	}
 	switch phase {
 	case "started":
+		// What is open takes back first (Escape): the page stays.
+		if rt.modal != 0 || rt.takesKey(0, KeyEscape) {
+			return
+		}
 		r.swiping, r.settling = true, false
 		r.swipe = 0
 		rt.swipeRouter = r
 	case "progress":
+		if !r.swiping {
+			return
+		}
 		// The system's progress follows the finger with a curve: the page
 		// goes part of the way, as the back gesture's preview does.
-		r.swiping = true
 		r.swipe = progress * 0.35
-		rt.swipeRouter = r
 	case "cancelled":
-		r.giveUpSwipe(rt)
+		if r.swiping {
+			r.giveUpSwipe(rt)
+		}
 	}
 	rt.requestFrame()
 }

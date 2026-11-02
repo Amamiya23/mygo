@@ -23,6 +23,17 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
         return vc
     }
 
+    /// Presents over what shows, once what shows stops going away: UIKit only
+    /// logs a presentation it refuses, whose answer would never come.
+    func present(_ vc: UIViewController, tries: Int = 20, then done: (() -> Void)? = nil) {
+        let top = presenter
+        if (top.isBeingDismissed || top.isBeingPresented) && tries > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.present(vc, tries: tries - 1, then: done) }
+            return
+        }
+        top.present(vc, animated: true, completion: done)
+    }
+
     func appInfo() -> AppInfoReply {
         var r = AppInfoReply()
         let b = Bundle.main
@@ -223,7 +234,7 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
             a.addAction(action)
             if i == c.defaultID { a.preferredAction = action }
         }
-        presenter.present(a, animated: true)
+        present(a)
     }
 
     func openFiles(_ c: OpenFilesCall) {
@@ -233,7 +244,7 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
         p.allowsMultipleSelection = c.multiple
         p.delegate = self
         pickers[p] = c.req
-        presenter.present(p, animated: true)
+        present(p)
     }
 
     func documentPicker(_ p: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
@@ -251,7 +262,7 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
         let vc = UIActivityViewController(activityItems: [URL(fileURLWithPath: c.path)], applicationActivities: nil)
         vc.popoverPresentationController?.sourceView = root.view
         vc.popoverPresentationController?.sourceRect = CGRect(x: root.view.bounds.midX, y: root.view.bounds.midY, width: 0, height: 0)
-        presenter.present(vc, animated: true)
+        present(vc)
     }
 
     // The system.
@@ -449,7 +460,7 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
         }
         let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
         popover(vc, x: c.x, y: c.y)
-        presenter.present(vc, animated: true) { Go.send(Event.shareResult(req: c.req, error: "")) }
+        present(vc) { Go.send(Event.shareResult(req: c.req, error: "")) }
     }
 
     /// Where a sheet points on an iPad, which shows it as a popover.
@@ -474,7 +485,7 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
         let p = UIDocumentPickerViewController(forExporting: [named], asCopy: true)
         p.delegate = self
         pickers[p] = c.req
-        presenter.present(p, animated: true)
+        present(p)
     }
 
     func clipboardImage() -> ClipboardImageReply {
@@ -508,7 +519,7 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
             Go.send(Event.menuPicked(req: c.req, item: 0))
         })
         popover(sheet, x: c.x, y: c.y)
-        presenter.present(sheet, animated: true)
+        present(sheet)
     }
 
     func setBarItems(_ c: SetBarItemsCall) {

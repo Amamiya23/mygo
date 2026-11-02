@@ -705,6 +705,13 @@ func (t *Tester) TouchUp(x, y float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerLeave, Touch: true})
 }
 
+// TouchCancel ends the finger as the system does when it takes it away: as a
+// system gesture starts, or a call comes.
+func (t *Tester) TouchCancel() {
+	t.send(platform.SurfaceEvent{Kind: platform.PointerUp, X: -1e6, Y: -1e6, Touch: true, Canceled: true})
+	t.send(platform.SurfaceEvent{Kind: platform.PointerLeave, Touch: true})
+}
+
 // Move moves the pointer to (x, y).
 func (t *Tester) Move(x, y float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerMove, X: float64(x), Y: float64(y)})

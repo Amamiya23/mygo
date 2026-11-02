@@ -97,6 +97,22 @@ object Navigation {
             v.bringToFront()
         }
         insetsChanged()
+        arrange()
+    }
+
+    /**
+     * Only what is in front stays on screen: the surfaces of two windows have
+     * no order of their own, whatever the order of their views. Not now: Go
+     * may be waiting for this call, and a surface going waits for Go.
+     */
+    private fun arrange() {
+        root.post {
+            val top = root.childCount - 1
+            for (k in 0..top) {
+                val v = root.getChildAt(k)
+                if (v is Stack || v is Tabs) v.visibility = if (k == top) View.VISIBLE else View.INVISIBLE
+            }
+        }
     }
 
     /** show brings a window to the front: its tab, its stack, or a stack of its own. */
@@ -128,6 +144,7 @@ object Navigation {
             if (s.tabs == null) {
                 root.removeView(s)
                 for (p in s.pages) stacks.remove(p.window.id)
+                arrange()
             }
         } else if (i > 0) {
             truncate(s, i, false)
@@ -231,7 +248,10 @@ object Navigation {
     fun addTab(id: Long, w: HostWindow, title: String, icon: ByteArray) {
         val t = tabs[id] ?: return
         stacks[w.id]?.let { old ->
-            if (old.tabs == null) root.removeView(old)
+            if (old.tabs == null) {
+                root.removeView(old)
+                arrange()
+            }
             stacks.remove(w.id)
         }
         val stack = Stack(w.context)
@@ -268,6 +288,7 @@ object Navigation {
     fun closeTabs(id: Long) {
         val t = tabs.remove(id) ?: return
         root.removeView(t)
+        arrange()
     }
 
     /**

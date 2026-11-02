@@ -1336,6 +1336,7 @@ type SetTextInput struct {
 	ID          int
 	Active      bool
 	Show        int
+	Serial      int
 	X           float64
 	Y           float64
 	Width       float64
@@ -1362,6 +1363,7 @@ func (m *SetTextInput) Encode(w *Writer) {
 	w.Int(m.ID)
 	w.Bool(m.Active)
 	w.Int(m.Show)
+	w.Int(m.Serial)
 	w.Float(m.X)
 	w.Float(m.Y)
 	w.Float(m.Width)
@@ -1717,10 +1719,17 @@ type MemoryWarningEvent struct {
 func (m *MemoryWarningEvent) Decode(r *Reader) {
 }
 
+// TerminatingEvent is the process ends once Go answers.
 type TerminatingEvent struct {
 }
 
 func (m *TerminatingEvent) Decode(r *Reader) {
+}
+
+type TerminatingReply struct {
+}
+
+func (m *TerminatingReply) Encode(w *Writer) {
 }
 
 // ResizedEvent is the window's size in DIPs, the scale, and the insets of what covers it: the system's bars, the cutout, the keyboard.
@@ -2537,7 +2546,7 @@ func (m *AccessibilityActionReply) Encode(w *Writer) {
 // EventWaits reports whether the host waits for the reply of event op.
 func EventWaits(op uint64) bool {
 	switch op {
-	case EventBackground, EventBackPressed, EventWillNavigate, EventNewWindow, EventPermissionRequested, EventSurfaceDestroyed, EventKey, EventTextReplace, EventTextMark, EventTextUnmark, EventTextDelete, EventTextSelect, EventTextCommand, EventTextState, EventTextRange, EventTextBounds, EventTextIndexAt, EventAccessibilityTree, EventAccessibilityAction:
+	case EventBackground, EventTerminating, EventBackPressed, EventWillNavigate, EventNewWindow, EventPermissionRequested, EventSurfaceDestroyed, EventKey, EventTextReplace, EventTextMark, EventTextUnmark, EventTextDelete, EventTextSelect, EventTextCommand, EventTextState, EventTextRange, EventTextBounds, EventTextIndexAt, EventAccessibilityTree, EventAccessibilityAction:
 		return true
 	}
 	return false

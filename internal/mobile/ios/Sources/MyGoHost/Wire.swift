@@ -887,6 +887,7 @@ public struct SetTextInputCall {
     public var id: Int = 0
     public var active: Bool = false
     public var show: Int = 0
+    public var serial: Int = 0
     public var x: Double = 0
     public var y: Double = 0
     public var width: Double = 0
@@ -911,6 +912,7 @@ public struct SetTextInputCall {
         id = r.int()
         active = r.bool()
         show = r.int()
+        serial = r.int()
         x = r.float()
         y = r.float()
         width = r.float()
@@ -1572,6 +1574,7 @@ public enum Event {
         w.uvarint(7)
         return w.buf
     }
+    /// the process ends once Go answers
     public static func terminating() -> [UInt8] {
         var w = WireWriter()
         w.uvarint(8)
@@ -2020,6 +2023,12 @@ public enum Event {
 }
 
 public struct BackgroundReply {
+    public init() {}
+    init(_ r: inout WireReader) {
+    }
+}
+
+public struct TerminatingReply {
     public init() {}
     init(_ r: inout WireReader) {
     }

@@ -189,3 +189,47 @@ func TestSwipeRow(t *testing.T) {
 		t.Error("tapping the action did nothing")
 	}
 }
+
+// A sheet stays at its detent as the window turns, whose height is another.
+func TestSheetTurns(t *testing.T) {
+	open := true
+	var top float32
+	tt := ui.NewTester(func(c *ui.Context) {
+		Sheet(c, &open, SheetOptions{Detents: []float32{0.5, 1}}, func() {
+			top = ui.Box(c).Fill().Bounds().Y
+		})
+	}, 400, 800)
+	tt.Frame()
+	advance(tt, 2*time.Second)
+	tt.SetSize(800, 300)
+	tt.Frame()
+	advance(tt, 2*time.Second)
+	if !open {
+		t.Fatal("turned: it closed")
+	}
+	if top < 130 || top > 170 {
+		t.Errorf("turned: its content shows at %v of 300", top)
+	}
+}
+
+// Opened again as it closes, it opens.
+func TestSheetReopens(t *testing.T) {
+	open := true
+	var top float32
+	tt := ui.NewTester(func(c *ui.Context) {
+		Sheet(c, &open, SheetOptions{Detents: []float32{0.5}}, func() {
+			top = ui.Box(c).Fill().Bounds().Y
+		})
+	}, 400, 800)
+	tt.Frame()
+	advance(tt, 2*time.Second)
+	open = false
+	tt.Frame()
+	advance(tt, 50*time.Millisecond)
+	open = true
+	tt.Frame()
+	advance(tt, 2*time.Second)
+	if !open || top > 420 {
+		t.Errorf("reopened: open %v, its content shows at %v", open, top)
+	}
+}

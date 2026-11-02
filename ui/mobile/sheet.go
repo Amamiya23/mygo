@@ -24,6 +24,10 @@ type sheetState struct {
 	offset ui.Point
 	// shown says it is on screen, opened that it went up from below it.
 	shown, opened bool
+	// height is what it was laid out for, which detent, the one it rests at,
+	// takes it back to as the window changes.
+	height float32
+	detent int
 }
 
 // Sheet shows a panel coming up from the bottom of the window while *open,
@@ -57,9 +61,17 @@ func Sheet(c *ui.Context, open *bool, o SheetOptions, content func()) {
 		s.shown, s.opened = true, false
 		s.offset = ui.Point{Y: closedY}
 	}
+	if s.opened && s.height != height && s.height > 0 {
+		// The window turned: the same detent, in its new height.
+		s.offset = rest(detents[min(s.detent, len(detents)-1)])
+	}
+	s.height = height
 	points := make([]ui.Point, 0, len(detents)+1)
-	for _, d := range detents {
+	for i, d := range detents {
 		points = append(points, rest(d))
+		if s.opened && s.offset == points[i] {
+			s.detent = i
+		}
 	}
 	if !o.NoDismiss {
 		points = append(points, ui.Point{Y: closedY})
@@ -99,11 +111,13 @@ func Sheet(c *ui.Context, open *bool, o SheetOptions, content func()) {
 			c.AnimationFrame() // shows below the window, to go up from there
 		case !*open:
 			s.offset = ui.Point{Y: closedY}
+			s.opened = false
 		case !s.opened:
-			s.opened = true
+			s.opened, s.detent = true, 0
 			s.offset = rest(detents[0])
-		case s.offset.Y >= closedY && !panel.Dragging():
+		case !o.NoDismiss && s.offset.Y >= closedY && !panel.Dragging():
 			*open = false // dragged away
+			s.opened = false
 		}
 		shown := panel.DragOffset()
 		back.Background(scrim(c, 1-shown.Y/max(closedY, 1)))

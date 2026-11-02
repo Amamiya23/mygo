@@ -255,8 +255,13 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		if !t.down {
 			return false
 		}
+		if ev.Canceled {
+			rt.cancelTouch()
+			return true
+		}
 		was := *t
 		t.down, t.waiting, t.holds = false, false, 0
+		rt.releaseCaught(&was)
 		if rt.touchText.held != handleNone {
 			rt.touchText.held = handleNone
 			rt.touchSurface(func(s platform.TouchSurface) { s.HideMagnifier() })
@@ -360,6 +365,40 @@ func (rt *engine) nearestPressable(x, y float32) (dx, dy float32) {
 		}
 	}
 	return 0, 0
+}
+
+// cancelTouch ends a finger the system took away: what it held goes back, and
+// it clicks nothing, throws nothing and commits nothing.
+func (rt *engine) cancelTouch() {
+	t := &rt.touch
+	was := *t
+	*t = touchPan{}
+	rt.releaseCaught(&was)
+	if rt.touchText.held != handleNone {
+		rt.touchText.held = handleNone
+		rt.touchSurface(func(s platform.TouchSurface) { s.HideMagnifier() })
+	}
+	if r := rt.swipeRouter; was.edge && r != nil {
+		r.giveUpSwipe(rt)
+	}
+	if s := rt.states[was.target]; was.panning && s != nil && s.overRaw != ([2]float32{}) {
+		rt.startBounce(s, 0, 0)
+	}
+	if !was.waiting {
+		rt.cancelPress()
+	}
+	rt.requestFrame()
+}
+
+// releaseCaught sends on what the finger stopped as it landed, but what it went
+// on to pan, whose lift does.
+func (rt *engine) releaseCaught(was *touchPan) {
+	for _, id := range rt.caught {
+		if s := rt.states[id]; s != nil && (!was.panning || id != was.target) && (s.overRaw != ([2]float32{}) || s.over != ([2]float32{})) {
+			rt.startBounce(s, 0, 0)
+		}
+	}
+	rt.caught = rt.caught[:0]
 }
 
 // afterTap notes what a finger's tap did to a text input.
@@ -703,6 +742,7 @@ func (rt *engine) catchBounces() {
 				s.overRaw[axis] = s.rawFor(axis, s.over[axis])
 			}
 			s.overV = [2]float32{}
+			rt.caught = append(rt.caught, id)
 		}
 	}
 	rt.bouncing = rt.bouncing[:0]

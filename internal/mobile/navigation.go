@@ -20,9 +20,10 @@ func (b *Backend) NewTabs(tabs []platform.Tab, h platform.TabsHandler) (platform
 	t := &tabBar{b: b, id: b.nextID, h: h}
 	b.call(&wire.CreateTabs{ID: t.id}, nil)
 	old := b.front()
-	for _, tab := range tabs {
+	for i, tab := range tabs {
 		w := tab.Window.(*window)
 		w.visible = true
+		w.tabs, w.tabIndex = t, i
 		b.unshow(w)
 		b.shown = append(b.shown, w)
 		b.call(&wire.AddTab{ID: t.id, Window: w.id, Title: tab.Title, Symbol: tab.Symbol, Icon: tab.Icon}, nil)
@@ -37,7 +38,26 @@ func (b *Backend) NewTabs(tabs []platform.Tab, h platform.TabsHandler) (platform
 	return t, nil
 }
 
-func (t *tabBar) Select(i int) { t.b.call(&wire.SelectTab{ID: t.id, Index: i}, nil) }
+func (t *tabBar) Select(i int) {
+	t.fronted(i)
+	t.b.call(&wire.SelectTab{ID: t.id, Index: i}, nil)
+}
+
+// fronted makes the windows of tab i those in front, in the order they were.
+func (t *tabBar) fronted(i int) {
+	b := t.b
+	old := b.front()
+	var mine, rest []*window
+	for _, w := range b.shown {
+		if w.tabs == t && w.tabIndex == i {
+			mine = append(mine, w)
+		} else {
+			rest = append(rest, w)
+		}
+	}
+	b.shown = append(rest, mine...)
+	b.refocus(old)
+}
 
 func (t *tabBar) SetBadge(i int, badge string) {
 	t.b.call(&wire.SetTabBadge{ID: t.id, Index: i, Badge: badge}, nil)
@@ -50,6 +70,7 @@ func (t *tabBar) Close() {
 
 func (b *Backend) PushWindow(parent, child platform.Window, animated bool) {
 	p, c := parent.(*window), child.(*window)
+	c.tabs, c.tabIndex = p.tabs, p.tabIndex
 	old := b.front()
 	c.visible = true
 	b.unshow(c)
@@ -70,6 +91,7 @@ func (b *Backend) handleNavigation(op uint64, r *wire.Reader) bool {
 		var e wire.TabSelectedEvent
 		e.Decode(r)
 		if t := b.tabs[e.ID]; t != nil {
+			t.fronted(e.Index)
 			t.h.TabSelected(e.Index)
 		}
 	case wire.EventBarItemClicked:

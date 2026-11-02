@@ -276,6 +276,7 @@ func (r *Router) Forward() { r.Go(1) }
 // Go moves n pages through the history: back for a negative n, forward
 // for a positive one, as far as it goes.
 func (r *Router) Go(n int) {
+	r.endSwipe()
 	r.current()
 	at := max(0, min(r.at+n, len(r.entries)-1))
 	if at != r.at {

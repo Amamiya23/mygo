@@ -326,6 +326,18 @@ func (a *app) system(c *ui.Context) {
 				}
 				row := mobile.ListRow(c.Key("bars"), mobile.RowOptions{Title: "Hide the system's bars", Trailing: func() { mobile.Switch(c.Key("bs"), &a.bars) }})
 				_ = row
+				if mobile.ListRow(c.Key("window"), mobile.RowOptions{Title: "Another window", Subtitle: "Over this one", Disclosure: true}).Clicked() {
+					var w *mygo.Window
+					w = mygo.NewWindow(mygo.WindowOptions{Title: "Another window", Content: ui.View(func(c *ui.Context) {
+						ui.Column(c).Fill().Background(c.Theme().Accent).Padding(80, 24, 24, 24).Gap(16).Children(func() {
+							ui.Text(c, "A window of its own").FontSize(24).TextColor(ui.RGB(255, 255, 255))
+							if ui.Button(c, "Close").Clicked() {
+								w.Close()
+							}
+						})
+					})})
+					w.Show()
+				}
 				if mobile.ListRow(c.Key("land"), mobile.RowOptions{Title: "Hold on its side"}).Clicked() {
 					mygo.SetOrientations(mygo.OrientationLandscape)
 				}
