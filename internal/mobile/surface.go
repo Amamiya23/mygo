@@ -183,6 +183,12 @@ func (s *surface) UpdateAccessibility(tree *platform.AccessTree) {
 	}
 }
 
+func (s *surface) Haptic(kind string) { s.w.b.Haptic(kind) }
+
+func (s *surface) ShowEditMenu(x, y float64) {
+	s.w.b.call(&wire.ShowMenu{ID: s.w.id, X: x, Y: y, Actions: []string{"cut", "copy", "paste", "selectAll"}}, nil)
+}
+
 func (s *surface) StartDataDrag(platform.DragRequest)        {}
 func (s *surface) CancelDataDrag()                           {}
 func (s *surface) SetDropFormats([]transfer.Format)          {}

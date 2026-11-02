@@ -685,6 +685,17 @@ type state struct {
 	// scrollX and scrollY are float64, as the content a List scrolls
 	// may be taller than float32 counts to a fraction of a DIP.
 	scrollX, scrollY float64
+	// A finger past the content's ends: how far the content shows past
+	// them across and down (the sign says which end), how far the finger
+	// went, how fast it springs back, and until when its indicator shows.
+	over, overRaw, overV [2]float32
+	barsUntil            time.Time
+	// refresh is the pull to refresh of the container (PullToRefresh).
+	refresh      *RefreshState
+	refreshFired bool
+	// longPress says the element asks for long presses (LongPressed), and
+	// longPressed that a finger held it since the last frame.
+	longPress, longPressed bool
 	contentW         float64
 	contentH         float64
 	// barInset is the element's ScrollbarInsets, and barWidth the width

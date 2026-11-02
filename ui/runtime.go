@@ -403,6 +403,11 @@ type engine struct {
 	cursor    Cursor
 	// ime is the text input state the host has, and base the rune of the
 	// focused editor its text starts at.
+	// bouncing lists the containers springing back from past their ends, and
+	// bounceAt is when they last moved; barsFadeAt until when indicators show.
+	bouncing   []uint64
+	bounceAt   time.Time
+	barsFadeAt time.Time
 	ime struct {
 		state platform.TextInputState
 		base  int

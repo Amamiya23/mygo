@@ -139,3 +139,230 @@ func TestTouchPressDelay(t *testing.T) {
 	}
 	tt.TouchUp(100, 100)
 }
+
+// A finger keeps to the way it first went, and to the container that scrolls
+// that way: a list across inside a list down takes only what goes across.
+func TestTouchLocksAxis(t *testing.T) {
+	var outer, inner ScrollState
+	tt := coreNewTester(func(c *context) {
+		coreScroll(c).Fill().TrackScroll(&outer).Children(func() {
+			coreScrollHorizontal(c).Height(100).Shrink(0).TrackScroll(&inner).Children(func() {
+				coreBox(c).Width(1000).Height(100).Shrink(0)
+			})
+			coreBox(c).Height(1000).Shrink(0)
+		})
+	}, 200, 200)
+	tt.TouchDown(100, 50)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(70, 52) // across
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(40, 90) // then diagonally: it keeps going across
+	tt.Frame()
+	if inner.X != 30 || outer.Y != 0 {
+		t.Errorf("across: inner %v, outer %v", inner.X, outer.Y)
+	}
+	tt.TouchUp(40, 90)
+	tt.Advance(5 * time.Second)
+	inner.X = 0
+	tt.Frame()
+	tt.TouchDown(100, 150)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(102, 120) // down the list, from outside the inner one
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(102, 100)
+	tt.Frame()
+	if inner.X != 0 || outer.Y != 20 {
+		t.Errorf("down: inner %v, outer %v", inner.X, outer.Y)
+	}
+}
+
+// Past the end the content follows the finger less and less far, and springs
+// back as it lifts.
+func TestTouchOverscrolls(t *testing.T) {
+	defer func(k overscroll) { overscrollKind = k }(overscrollKind)
+	overscrollKind = overscrollBounce
+	var s ScrollState
+	var top float32
+	tt := coreNewTester(func(c *context) {
+		coreScroll(c).Fill().TrackScroll(&s).Children(func() {
+			b := coreBox(c).Height(1000).Shrink(0)
+			top = b.st.y
+		})
+	}, 200, 200)
+	tt.Frame()
+	tt.TouchDown(100, 50)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(100, 60)
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(100, 110) // 50 past the top
+	tt.Frame()
+	tt.Frame()
+	if s.Y != 0 {
+		t.Fatalf("scrolled to %v", s.Y)
+	}
+	if top <= 0 || top >= 50 {
+		t.Fatalf("pulled 50 past the top: the content shows %v down", top)
+	}
+	pulled := top
+	tt.Advance(200 * time.Millisecond) // a finger at rest throws nothing
+	tt.TouchUp(100, 110)
+	tt.Advance(100 * time.Millisecond)
+	tt.Frame()
+	if top >= pulled {
+		t.Errorf("as it lifts, it should spring back: %v from %v", top, pulled)
+	}
+	for range 200 {
+		tt.Advance(16 * time.Millisecond)
+	}
+	tt.Frame()
+	if top != 0 {
+		t.Errorf("after the spring, it shows at %v", top)
+	}
+	// Without overscroll it stops at the end.
+	overscrollKind = overscrollNone
+	tt.TouchDown(100, 50)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(100, 60)
+	tt.TouchMove(100, 110)
+	tt.Frame()
+	tt.Frame()
+	if top != 0 {
+		t.Errorf("without overscroll it shows at %v", top)
+	}
+	tt.TouchUp(100, 110)
+}
+
+// A finger held still long-presses, which clicks nothing; moved first, it
+// does not.
+func TestTouchLongPress(t *testing.T) {
+	long, clicks := 0, 0
+	tt := coreNewTester(func(c *context) {
+		b := coreBox(c).Fill()
+		if b.LongPressed() {
+			long++
+		}
+		if b.Clicked() {
+			clicks++
+		}
+	}, 200, 200)
+	tt.Frame()
+	tt.TouchDown(50, 50)
+	tt.Advance(400 * time.Millisecond)
+	if long != 0 {
+		t.Fatal("too soon")
+	}
+	tt.Advance(200 * time.Millisecond)
+	tt.Frame()
+	if long != 1 {
+		t.Fatalf("long presses: %d", long)
+	}
+	tt.TouchUp(50, 50)
+	tt.Frame()
+	if clicks != 0 {
+		t.Errorf("a long press clicked %d times", clicks)
+	}
+	// A tap clicks, and long-presses nothing.
+	tt.Advance(time.Second)
+	tt.TouchDown(50, 50)
+	tt.Advance(50 * time.Millisecond)
+	tt.TouchUp(50, 50)
+	tt.Advance(time.Second)
+	tt.Frame()
+	if long != 1 || clicks != 1 {
+		t.Errorf("a tap: %d long, %d clicks", long, clicks)
+	}
+}
+
+// A sideways Draggable in a list takes what goes sideways, and leaves what
+// goes down to the list.
+func TestTouchDraggableAxisInScroll(t *testing.T) {
+	var s ScrollState
+	var off Point
+	tt := coreNewTester(func(c *context) {
+		coreScroll(c).Fill().TrackScroll(&s).Children(func() {
+			coreBox(c).Height(100).Shrink(0).Draggable(&off, DraggableOptions{Axis: Horizontal})
+			coreBox(c).Height(1000).Shrink(0)
+		})
+	}, 200, 200)
+	tt.Frame()
+	// Down: the list.
+	tt.TouchDown(100, 50)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(101, 30)
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(101, 20)
+	tt.Frame()
+	if off.X != 0 || s.Y != 10 {
+		t.Errorf("down: dragged %v, scrolled %v", off.X, s.Y)
+	}
+	tt.TouchUp(101, 20)
+	tt.Advance(5 * time.Second)
+	s.Y = 0
+	tt.Frame()
+	// Across: the row.
+	tt.TouchDown(100, 50)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(70, 51)
+	tt.Frame()
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(40, 51)
+	tt.Frame()
+	if off.X >= 0 || s.Y != 0 {
+		t.Errorf("across: dragged %v, scrolled %v", off.X, s.Y)
+	}
+	tt.TouchUp(40, 51)
+}
+
+// Pulling a container past its top by enough refreshes it.
+func TestPullToRefresh(t *testing.T) {
+	defer func(k overscroll) { overscrollKind = k }(overscrollKind)
+	overscrollKind = overscrollBounce
+	var r RefreshState
+	fired := 0
+	tt := coreNewTester(func(c *context) {
+		e := coreScroll(c).Fill()
+		if e.PullToRefresh(&r) {
+			fired++
+		}
+		e.Children(func() { coreBox(c).Height(50).Shrink(0) })
+	}, 200, 200)
+	tt.Frame()
+	tt.TouchDown(100, 20)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(100, 30)
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(100, 60) // not far enough
+	tt.TouchUp(100, 60)
+	for range 100 {
+		tt.Advance(16 * time.Millisecond)
+	}
+	if fired != 0 || r.Refreshing {
+		t.Fatalf("a short pull fired %d times", fired)
+	}
+	tt.TouchDown(100, 20)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(100, 30)
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(100, 190)
+	tt.TouchUp(100, 190)
+	tt.Frame()
+	if fired != 1 || !r.Refreshing {
+		t.Fatalf("a long pull: fired %d, refreshing %v", fired, r.Refreshing)
+	}
+	// It rests with the indicator showing until the app is done.
+	for range 100 {
+		tt.Advance(16 * time.Millisecond)
+	}
+	st := tt.rt.states[tt.rt.lastScrollerForTest()]
+	if st == nil || st.over[1] != -refreshPull {
+		t.Fatalf("while refreshing: over %+v", st)
+	}
+	r.Refreshing = false
+	tt.Frame()
+	for range 100 {
+		tt.Advance(16 * time.Millisecond)
+	}
+	if st.over[1] != 0 {
+		t.Errorf("after refreshing: over %v", st.over[1])
+	}
+}

@@ -402,6 +402,7 @@ func (p *Painter) element(e *node) {
 	}
 	if e.scrolls() && own {
 		p.scrollbars(e)
+		p.paintRefresh(e)
 	}
 	if own && borderOver {
 		p.border(e, box)
@@ -1156,10 +1157,16 @@ func (p *Painter) scrollbars(e *node) {
 	// track, so that the pointer coming over changes nothing.
 	hide, keep := e.scrollbars()
 	st.barsShown = !hide && (keep || hovered || dragging)
-	if !st.barsShown {
-		return
-	}
 	color := theme.Scrollbar
+	if !st.barsShown {
+		// A finger shows it for a moment as it moves the content, and it
+		// fades: no press takes it.
+		fade := st.touchIndicator(rt)
+		if hide || fade <= 0 {
+			return
+		}
+		color.A = uint8(float32(color.A) * fade)
+	}
 	w, h := e.contentW, e.contentH
 	x, y := st.scrollX, st.scrollY
 	if dragging {

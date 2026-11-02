@@ -150,6 +150,16 @@ type InsetSurface interface {
 	Insets() Insets
 }
 
+// TouchSurface is a Surface of a touch screen, whose system has more to say
+// to fingers than pixels.
+type TouchSurface interface {
+	// Haptic plays a haptic (DeviceBackend.Haptic).
+	Haptic(kind string)
+	// ShowEditMenu shows the system's menu of editing commands at a point in
+	// DIPs: cut, copy, paste and select all, which come as SurfaceCommand.
+	ShowEditMenu(x, y float64)
+}
+
 // IdleSurface is a Surface that can give back memory once frames stop.
 type IdleSurface interface {
 	// Idle tells that no frame came for a while: the surface may give
