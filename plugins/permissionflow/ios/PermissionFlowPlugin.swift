@@ -13,7 +13,9 @@ final class PermissionFlowPlugin: MyGoPlugin {
 
     private typealias StatusFn = @convention(c) (AnyClass, Selector, AnyObject) -> Int
     private typealias IntStatusFn = @convention(c) (AnyClass, Selector, Int) -> Int
-    private typealias AskFn = @convention(c) (AnyClass, Selector, AnyObject, @convention(block) (Bool) -> Void) -> Void
+    // Blocks go as objects: a closure given to a C function is taken not to
+    // escape, and Swift traps when the framework keeps it.
+    private typealias AskFn = @convention(c) (AnyClass, Selector, AnyObject, AnyObject) -> Void
 
     private func avStatus(_ media: String) -> String {
         load("AVFoundation")
@@ -33,7 +35,8 @@ final class PermissionFlowPlugin: MyGoPlugin {
         let sel = NSSelectorFromString("requestAccessForMediaType:completionHandler:")
         guard let c = NSClassFromString("AVCaptureDevice"), let m = class_getClassMethod(c, sel) else { return done(false) }
         let fn = unsafeBitCast(method_getImplementation(m), to: AskFn.self)
-        fn(c, sel, media as NSString, { done($0) })
+        let block: @convention(block) (Bool) -> Void = { done($0) }
+        fn(c, sel, media as NSString, unsafeBitCast(block, to: AnyObject.self))
     }
 
     private func photosStatus() -> String {
@@ -50,11 +53,12 @@ final class PermissionFlowPlugin: MyGoPlugin {
 
     private func photosRequest(_ done: @escaping (Bool) -> Void) {
         load("Photos")
-        typealias Fn = @convention(c) (AnyClass, Selector, Int, @convention(block) (Int) -> Void) -> Void
+        typealias Fn = @convention(c) (AnyClass, Selector, Int, AnyObject) -> Void
         let sel = NSSelectorFromString("requestAuthorizationForAccessLevel:handler:")
         guard let c = NSClassFromString("PHPhotoLibrary"), let m = class_getClassMethod(c, sel) else { return done(false) }
         let fn = unsafeBitCast(method_getImplementation(m), to: Fn.self)
-        fn(c, sel, 2, { done($0 == 3 || $0 == 4) })
+        let block: @convention(block) (Int) -> Void = { done($0 == 3 || $0 == 4) }
+        fn(c, sel, 2, unsafeBitCast(block, to: AnyObject.self))
     }
 
     private func contactsStatus() -> String {
@@ -71,12 +75,16 @@ final class PermissionFlowPlugin: MyGoPlugin {
 
     private func contactsRequest(_ done: @escaping (Bool) -> Void) {
         load("Contacts")
-        typealias Fn = @convention(c) (AnyObject, Selector, Int, @convention(block) (Bool, NSError?) -> Void) -> Void
+        typealias Fn = @convention(c) (AnyObject, Selector, Int, AnyObject) -> Void
         let sel = NSSelectorFromString("requestAccessForEntityType:completionHandler:")
         guard let c = NSClassFromString("CNContactStore") as? NSObject.Type, let m = class_getInstanceMethod(c, sel) else { return done(false) }
         let store = c.init()
         let fn = unsafeBitCast(method_getImplementation(m), to: Fn.self)
-        fn(store, sel, 0, { ok, _ in _ = store; done(ok) })
+        let block: @convention(block) (Bool, NSError?) -> Void = { ok, _ in
+            _ = store
+            done(ok)
+        }
+        fn(store, sel, 0, unsafeBitCast(block, to: AnyObject.self))
     }
 
     private func usage(_ key: String) -> Bool { Bundle.main.object(forInfoDictionaryKey: key) != nil }
