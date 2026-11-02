@@ -64,6 +64,7 @@ type Application struct {
 	onQuit            listeners[func()]
 	onMemoryWarning   listeners[func()]
 	saveState         func() []byte
+	keepingState      bool
 	onActivate        listeners[func(bool)]
 	onDidBecomeActive listeners[func()]
 	onDidResignActive listeners[func()]
@@ -496,8 +497,13 @@ func (a *Application) OnQuit(fn func()) (off func()) { return a.onQuit.add(fn, f
 // OnSaveState has fn give what the app needs to come back as it was, called on
 // the main thread as a phone's app goes to the background, where the system may
 // end it without a word. The next launch finds it in RestoredState. Keep it
-// small: it is written before the app may do no more. Desktops never call it.
-func (a *Application) OnSaveState(fn func() []byte) { a.saveState = fn }
+// small: it is written before the app may do no more. Desktops never call it,
+// but under mygo dev, which restarts the app as the code changes: it is called
+// every second there, for the app to come back as it was on every platform.
+func (a *Application) OnSaveState(fn func() []byte) {
+	a.saveState = fn
+	a.keepStateInDevelopment()
+}
 
 // RestoredState returns what OnSaveState gave as the system ended the app in
 // the background, nil after any other way of ending: Android tells when the user

@@ -7,10 +7,25 @@ package dev.mygo
 import android.os.Looper
 import android.view.Surface
 
+/**
+ * A new library of the app's Go code, which mygo dev pushed to a debuggable app
+ * instead of building and installing it again.
+ */
+object DevLibrary {
+    var path: String? = null
+
+    fun find(c: android.content.Context) {
+        if (c.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) return
+        val f = java.io.File(c.filesDir, "mygo-dev/libmygoapp.so")
+        if (f.exists()) path = f.absolutePath
+    }
+}
+
 /** The Go library's native methods (jni_android.c in internal/mobile). */
 object MyGoNative {
     init {
-        System.loadLibrary("mygoapp")
+        val dev = DevLibrary.path
+        if (dev != null) System.load(dev) else System.loadLibrary("mygoapp")
     }
 
     /** Starts Go's main function on a thread of its own. UI thread, once. */

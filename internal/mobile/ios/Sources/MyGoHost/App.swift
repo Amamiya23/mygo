@@ -97,12 +97,6 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         PluginHost.applicationEvent(.pushError(error))
     }
 
-    func application(_ application: UIApplication, didReceiveRemoteNotification info: [AnyHashable: Any],
-                     fetchCompletionHandler done: @escaping (UIBackgroundFetchResult) -> Void) {
-        PluginHost.applicationEvent(.pushMessage(info))
-        done(.newData)
-    }
-
     func applicationDidReceiveMemoryWarning(_ application: UIApplication) { Go.send(Event.memoryWarning()) }
     func applicationWillTerminate(_ application: UIApplication) { Go.ask(Event.terminating()) }
 }

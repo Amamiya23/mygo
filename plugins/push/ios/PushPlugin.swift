@@ -44,3 +44,13 @@ final class PushPlugin: MyGoPlugin {
         }
     }
 }
+
+/// Only apps with this plugin have it: UIKit warns of a delegate with it and no
+/// remote-notification background mode.
+extension AppDelegate {
+    func application(_ application: UIApplication, didReceiveRemoteNotification info: [AnyHashable: Any],
+                     fetchCompletionHandler done: @escaping (UIBackgroundFetchResult) -> Void) {
+        PluginHost.applicationEvent(.pushMessage(info))
+        done(.newData)
+    }
+}

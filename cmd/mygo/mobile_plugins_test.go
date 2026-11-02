@@ -73,3 +73,33 @@ func TestMobilePlugins(t *testing.T) {
 		t.Error("a source outside the package")
 	}
 }
+
+// What decides whether Gradle runs changes with what an APK holds, not with the
+// app's Go code.
+func TestSwiftStamp(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "a.swift")
+	if err := os.WriteFile(src, []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	obj := filepath.Join(t.TempDir(), "host.o")
+	if swiftCompiled(dir, "arm64", obj) {
+		t.Error("nothing compiled yet")
+	}
+	if err := os.WriteFile(obj, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	noteSwiftCompiled(dir, "arm64", obj)
+	if !swiftCompiled(dir, "arm64", obj) {
+		t.Error("just compiled")
+	}
+	if swiftCompiled(dir, "x86_64", obj) {
+		t.Error("another target")
+	}
+	if err := os.WriteFile(src, []byte("b"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if swiftCompiled(dir, "arm64", obj) {
+		t.Error("a source changed")
+	}
+}

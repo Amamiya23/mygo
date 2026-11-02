@@ -182,8 +182,10 @@ func (s *devSession) launchMobile(dc *Config, app string) (*devProcess, error) {
 	var stop func()
 	switch s.device.platform {
 	case "ios":
-		if out, err := exec.Command("xcrun", "simctl", "install", s.device.id, app).CombinedOutput(); err != nil {
-			return nil, fmt.Errorf("simctl install: %v\n%s", err, strings.TrimSpace(string(out)))
+		if !s.replaceInstalled(dc, app) {
+			if out, err := exec.Command("xcrun", "simctl", "install", s.device.id, app).CombinedOutput(); err != nil {
+				return nil, fmt.Errorf("simctl install: %v\n%s", err, strings.TrimSpace(string(out)))
+			}
 		}
 		cmd = exec.Command("xcrun", "simctl", "launch", "--console-pty", "--terminate-running-process", s.device.id, dc.Identifier)
 		cmd.Env = os.Environ()
@@ -234,6 +236,84 @@ func (s *devSession) launchMobile(dc *Config, app string) (*devProcess, error) {
 		close(p.done)
 	}()
 	return p, nil
+}
+
+// replaceInstalled puts the new executable in the app the simulator has
+// installed, and reports whether that is all it takes: nothing else of the
+// bundle changed since it was installed. Installing takes the system seconds;
+// a change of the app's Go code changes only the executable.
+func (s *devSession) replaceInstalled(dc *Config, app string) bool {
+	h := sha256.New()
+	exe := dc.executableName()
+	err := filepath.WalkDir(app, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(app, path)
+		if rel == exe || rel == filepath.Join("_CodeSignature", "CodeResources") {
+			return nil
+		}
+		io.WriteString(h, rel+"\x00")
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(h, f)
+		return err
+	})
+	if err != nil {
+		return false
+	}
+	var sum [32]byte
+	copy(sum[:], h.Sum(nil))
+	same := s.installedBundle == sum && s.installedOn == s.device.id
+	s.installedBundle, s.installedOn = sum, s.device.id
+	if !same {
+		return false
+	}
+	out, err := exec.Command("xcrun", "simctl", "get_app_container", s.device.id, dc.Identifier, "app").Output()
+	if err != nil {
+		return false
+	}
+	installed := strings.TrimSpace(string(out))
+	data, err := os.ReadFile(filepath.Join(app, exe))
+	if err != nil {
+		return false
+	}
+	// A new file: the system maps the old one's while the app runs.
+	tmp := filepath.Join(installed, "."+exe+".new")
+	if os.WriteFile(tmp, data, 0o755) != nil {
+		return false
+	}
+	if os.Rename(tmp, filepath.Join(installed, exe)) != nil {
+		os.Remove(tmp)
+		return false
+	}
+	return true
+}
+
+// swiftStamp hashes the sources of the host, for what target it compiled.
+func swiftStamp(host, target string) string {
+	h := sha256.New()
+	io.WriteString(h, target+"\x00")
+	if hashTree(h, host) != nil {
+		return ""
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// swiftCompiled reports whether object is what the host's sources compile to.
+func swiftCompiled(host, target, object string) bool {
+	if _, err := os.Stat(object); err != nil {
+		return false
+	}
+	stamp, err := os.ReadFile(object + ".stamp")
+	return err == nil && string(stamp) == swiftStamp(host, target)
+}
+
+func noteSwiftCompiled(host, target, object string) {
+	os.WriteFile(object+".stamp", []byte(swiftStamp(host, target)), 0o644)
 }
 
 // mobileNoise reports whether a line of a development build's output is

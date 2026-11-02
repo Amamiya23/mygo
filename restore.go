@@ -3,6 +3,7 @@ package mygo
 import (
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/egoist/mygo/internal/platform"
 )
@@ -18,12 +19,34 @@ func restorationFile() (string, error) {
 	return filepath.Join(dir, "restoration.state"), nil
 }
 
-// writeState keeps what the app gives, on phones.
+// inDevelopment reports whether mygo dev runs the app, which it restarts as the
+// code changes: the app comes back as it was, as hot restart keeps it.
+func inDevelopment() bool { return os.Getenv("MYGO_DEV") != "" }
+
+// keepStateInDevelopment keeps what the app gives every second, as mygo dev ends
+// the app without a word.
+func (a *Application) keepStateInDevelopment() {
+	if !inDevelopment() || a.keepingState {
+		return
+	}
+	a.keepingState = true
+	a.WhenReady(func() {
+		go func() {
+			for range time.Tick(time.Second) {
+				if !postMain(a.writeState) {
+					return
+				}
+			}
+		}()
+	})
+}
+
+// writeState keeps what the app gives, on phones and under mygo dev.
 func (a *Application) writeState() {
 	if a.saveState == nil {
 		return
 	}
-	if _, ok := backend().(platform.DeviceBackend); !ok {
+	if _, ok := backend().(platform.DeviceBackend); !ok && !inDevelopment() {
 		return
 	}
 	data := a.saveState()
@@ -51,8 +74,11 @@ func restoredState() []byte {
 	if err != nil {
 		return nil
 	}
-	if d, ok := backend().(interface{ WasEndedBySystem() bool }); ok && !d.WasEndedBySystem() {
+	if d, ok := backend().(interface{ WasEndedBySystem() bool }); ok && !d.WasEndedBySystem() && !inDevelopment() {
 		os.Remove(path)
+		return nil
+	}
+	if _, ok := backend().(platform.DeviceBackend); !ok && !inDevelopment() {
 		return nil
 	}
 	data, err := os.ReadFile(path)

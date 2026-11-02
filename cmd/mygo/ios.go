@@ -115,21 +115,34 @@ func (t *iosToolchain) buildApp(ctx context.Context, c, dc *Config, tk *task, op
 		return "", err
 	}
 	exe := dc.executableName()
-	args := []string{"swiftc", "-parse-as-library", "-module-name", "MyGoHost", "-target", t.target, "-sdk", t.sdk,
-		"-import-objc-header", filepath.Join(host, "MyGo.h")}
-	if !opts.debug {
-		args = append(args, "-O")
-	}
-	args = append(args, swift...)
-	args = append(args, lib, "-o", filepath.Join(bundle, exe), "-Xlinker", "-dead_strip", "-lresolv")
+	// The host compiles apart from what links it, and the development build
+	// keeps what it compiled while its sources stay as they are: a change of
+	// the app's Go code only links.
+	var frameworks []string
 	for _, f := range []string{"UIKit", "WebKit", "Metal", "QuartzCore", "CoreText", "CoreGraphics", "Security", "CoreFoundation",
 		"UserNotifications", "UniformTypeIdentifiers", "Network"} {
-		args = append(args, "-framework", f)
+		frameworks = append(frameworks, "-framework", f)
 	}
 	for _, f := range plugins.frameworks() {
-		args = append(args, "-framework", f)
+		frameworks = append(frameworks, "-framework", f)
 	}
-	if out, err := exec.CommandContext(ctx, "xcrun", args...).CombinedOutput(); err != nil {
+	hostObject := filepath.Join(work, "host.o")
+	if !opts.debug || !swiftCompiled(host, t.target, hostObject) {
+		args := []string{"--sdk", t.sdkName, "swiftc", "-parse-as-library", "-module-name", "MyGoHost", "-target", t.target, "-sdk", t.sdk,
+			"-import-objc-header", filepath.Join(host, "MyGo.h"), "-wmo", "-c", "-o", hostObject}
+		if !opts.debug {
+			args = append(args, "-O")
+		}
+		args = append(args, swift...)
+		if out, err := exec.CommandContext(ctx, "xcrun", args...).CombinedOutput(); err != nil {
+			return "", fmt.Errorf("swiftc failed: %v\n%s", err, bytes.TrimSpace(out))
+		}
+		noteSwiftCompiled(host, t.target, hostObject)
+	}
+	tk.set("linking")
+	link := []string{"--sdk", t.sdkName, "swiftc", "-target", t.target, "-sdk", t.sdk, hostObject, lib, "-o", filepath.Join(bundle, exe), "-Xlinker", "-dead_strip", "-lresolv"}
+	link = append(link, frameworks...)
+	if out, err := exec.CommandContext(ctx, "xcrun", link...).CombinedOutput(); err != nil {
 		return "", fmt.Errorf("swiftc failed: %v\n%s", err, bytes.TrimSpace(out))
 	}
 

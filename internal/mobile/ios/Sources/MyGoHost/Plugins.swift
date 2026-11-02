@@ -69,7 +69,9 @@ public enum PluginHost {
         Go.send(Event.pluginEvent(plugin: plugin, name: name, data: encode(data)))
     }
 
-    static func applicationEvent(_ e: ApplicationEvent) {
+    /// Tells plugins what reached the app's delegate. Public for what a plugin
+    /// adds to the delegate itself, in an extension of AppDelegate.
+    public static func applicationEvent(_ e: ApplicationEvent) {
         for p in plugins.values { p.applicationEvent(e) }
     }
 

@@ -217,6 +217,11 @@ type devSession struct {
 	icns         []byte
 	mainFor      string // the Main that mainDir is the package directory of
 	mainDir      string
+	// What the phone has installed, which a change of the Go code keeps: the
+	// device, the iOS bundle but its executable, the Android host.
+	installedOn     string
+	installedBundle [32]byte
+	androidHost     string
 
 	// Used by the run loop only.
 	app *devProcess // the running build

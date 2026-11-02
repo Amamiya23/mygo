@@ -3,9 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image/png"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -477,6 +481,22 @@ func (s *devSession) buildAndroidDev(ctx context.Context, c, dc *Config, t *task
 	if err := tc.buildGo(ctx, c, dc, t, opts, abi, jniLibs); err != nil {
 		return "", err
 	}
+	// Only Go changed: the app the device has takes the new library, without
+	// Gradle.
+	key, keyErr := androidHostKey(c, dc, dir)
+	if keyErr == nil && key == s.androidHost && s.installedOn == s.device.id {
+		lib := filepath.Join(stage, dc.slug()+".lib")
+		if err := os.MkdirAll(lib, 0o755); err != nil {
+			return "", err
+		}
+		data, err := os.ReadFile(filepath.Join(jniLibs, abi, "libmygoapp.so"))
+		if err != nil {
+			return "", err
+		}
+		return lib, os.WriteFile(filepath.Join(lib, "libmygoapp.so"), data, 0o755)
+	}
+	s.androidHost = key
+	s.installedOn = s.device.id
 	t.set("building the APK (Gradle)")
 	if err := tc.gradle(ctx, c, dc, dir, opts.work, jniLibs, ":app:assembleDebug"); err != nil {
 		return "", err
@@ -496,11 +516,19 @@ func (s *devSession) buildAndroidDev(ctx context.Context, c, dc *Config, t *task
 // launchAndroid installs the APK and starts the app with env, its log the
 // output of the process it returns.
 func (s *devSession) launchAndroid(dc *Config, app string, env []string) (*exec.Cmd, func(), error) {
-	apk := filepath.Join(app, "app.apk")
-	if out, err := adb(s.device.id, "install", "-r", "-t", apk).CombinedOutput(); err != nil {
-		return nil, nil, fmt.Errorf("adb install: %v\n%s", err, bytes.TrimSpace(out))
-	}
 	adb(s.device.id, "shell", "am", "force-stop", dc.Identifier).Run()
+	if lib := filepath.Join(app, "libmygoapp.so"); fileExists(lib) {
+		if err := s.pushAndroidLib(dc, lib); err != nil {
+			return nil, nil, err
+		}
+	} else {
+		apk := filepath.Join(app, "app.apk")
+		if out, err := adb(s.device.id, "install", "-r", "-t", apk).CombinedOutput(); err != nil {
+			return nil, nil, fmt.Errorf("adb install: %v\n%s", err, bytes.TrimSpace(out))
+		}
+		// The library of the APK, not the last one pushed.
+		adb(s.device.id, "shell", "run-as", dc.Identifier, "rm", "-rf", "files/mygo-dev").Run()
+	}
 	adb(s.device.id, "logcat", "-c").Run()
 	quoted := strings.ReplaceAll(strings.Join(env, "\n"), "'", `'\''`)
 	if out, err := adb(s.device.id, "shell", "am start -W -n "+dc.Identifier+"/dev.mygo.MyGoActivity --es mygo.env '"+quoted+"'").CombinedOutput(); err != nil {
@@ -510,6 +538,74 @@ func (s *devSession) launchAndroid(dc *Config, app string, env []string) (*exec.
 	cmd := adb(s.device.id, "logcat", "-v", "raw", "-s", "mygo:V", "AndroidRuntime:E", "DEBUG:V")
 	serial, id := s.device.id, dc.Identifier
 	return cmd, func() { adb(serial, "shell", "am", "force-stop", id).Run() }, nil
+}
+
+// pushAndroidLib gives the debuggable app on the device a new library of the
+// app's Go code, which the host loads rather than its own (DevLibrary).
+func (s *devSession) pushAndroidLib(dc *Config, lib string) error {
+	tmp := "/data/local/tmp/mygo-" + dc.Identifier + ".so"
+	if out, err := adb(s.device.id, "push", lib, tmp).CombinedOutput(); err != nil {
+		return fmt.Errorf("adb push: %v\n%s", err, bytes.TrimSpace(out))
+	}
+	script := "mkdir -p files/mygo-dev && rm -f files/mygo-dev/libmygoapp.so && cp " + tmp + " files/mygo-dev/libmygoapp.so && chmod 500 files/mygo-dev/libmygoapp.so"
+	if out, err := adb(s.device.id, "shell", "run-as "+dc.Identifier+" sh -c '"+script+"'").CombinedOutput(); err != nil {
+		return fmt.Errorf("adb run-as: %v\n%s", err, bytes.TrimSpace(out))
+	}
+	adb(s.device.id, "shell", "rm", "-f", tmp).Run()
+	return nil
+}
+
+// androidHostKey hashes what an APK holds besides the app's Go code: the host's
+// project and the plugins' code in dir, the manifest, the resources and the
+// configuration. While it stays, a change of the Go code needs no Gradle.
+func androidHostKey(c, dc *Config, dir string) (string, error) {
+	h := sha256.New()
+	cfg, err := json.Marshal(dc)
+	if err != nil {
+		return "", err
+	}
+	h.Write(cfg)
+	plugins, err := c.mobilePlugins("android")
+	if err != nil {
+		return "", err
+	}
+	h.Write(androidManifest(dc, plugins))
+	for _, sub := range []string{"mygo/src", "mygo/build.gradle.kts", "app/build.gradle.kts", "app/src"} {
+		if err := hashIfExists(h, filepath.Join(dir, filepath.FromSlash(sub))); err != nil {
+			return "", err
+		}
+	}
+	for _, p := range plugins {
+		if p.Android == nil {
+			continue
+		}
+		files, err := p.sourcesOf(p.Android.Sources)
+		if err != nil {
+			return "", err
+		}
+		for _, f := range files {
+			if err := hashIfExists(h, f); err != nil {
+				return "", err
+			}
+		}
+	}
+	res, err := dc.appResources("android", "arm64")
+	if err != nil {
+		return "", err
+	}
+	for _, r := range res {
+		if err := hashIfExists(h, r.src); err != nil {
+			return "", err
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func hashIfExists(h io.Writer, path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	return hashTree(h, path)
 }
 
 // reachDevURL returns the URL at which the device reaches the dev server

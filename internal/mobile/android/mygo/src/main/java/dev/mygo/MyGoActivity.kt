@@ -16,6 +16,7 @@ class MyGoActivity : ComponentActivity() {
     private var lastConfig: Configuration? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        DevLibrary.find(this)
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         lastConfig = Configuration(resources.configuration)
