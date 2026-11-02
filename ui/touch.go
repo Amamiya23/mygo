@@ -25,6 +25,12 @@ var (
 	touchInput func(rt *engine, ev platform.SurfaceEvent, x, y float32) bool
 	touchFrame func(rt *engine, now time.Time)
 	touchPaint func(rt *engine, p *Painter)
+	// touchSystem hears what phones' systems tell, and touchBars how much
+	// a scroll indicator shows.
+	touchSystem func(rt *engine, ev platform.SurfaceEvent)
+	touchBars   func(s *state, rt *engine) float32
+	// refreshPainter draws a pull to refresh, which PullToRefresh sets.
+	refreshPainter func(p *Painter, e *node)
 	// insetRoot keeps the content out from under what covers the
 	// window's edges, which only phones' do.
 	insetRoot     func(rt *engine, root *node)
@@ -36,6 +42,8 @@ func enableTouch() {
 	touchInput = (*engine).touchEvent
 	touchFrame = (*engine).touchStep
 	touchPaint = (*engine).touchOver
+	touchSystem = (*engine).systemEvent
+	touchBars = (*state).touchIndicator
 	insetRoot = (*engine).padInsets
 	extendScrolls = (*engine).extendUnderBottom
 }
@@ -837,6 +845,18 @@ func (rt *engine) longPress(t *touchPan) {
 // haptic plays a feel of the system's, on a device that has them.
 func (rt *engine) haptic(kind string) {
 	rt.touchSurface(func(s platform.TouchSurface) { s.Haptic(kind) })
+}
+
+// systemEvent handles what phones' systems tell.
+func (rt *engine) systemEvent(ev platform.SurfaceEvent) {
+	switch ev.Kind {
+	case platform.SurfaceLowMemory:
+		rt.lowMemory()
+	case platform.SurfaceBackGesture:
+		rt.backGesture(ev.Text, float32(ev.Scale))
+	case platform.SurfaceScrollToTop:
+		rt.scrollToTop()
+	}
 }
 
 // touchOver draws what fingers have over the frame, and tells the system

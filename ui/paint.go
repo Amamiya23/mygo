@@ -405,7 +405,9 @@ func (p *Painter) element(e *node) {
 	}
 	if e.scrolls() && own {
 		p.scrollbars(e)
-		p.paintRefresh(e)
+		if refreshPainter != nil {
+			refreshPainter(p, e)
+		}
 	}
 	if own && borderOver {
 		p.border(e, box)
@@ -1166,7 +1168,10 @@ func (p *Painter) scrollbars(e *node) {
 	if !st.barsShown {
 		// A finger shows it for a moment as it moves the content, and it
 		// fades: no press takes it.
-		fade := st.touchIndicator(rt)
+		if touchBars == nil {
+			return
+		}
+		fade := touchBars(st, rt)
 		if hide || fade <= 0 {
 			return
 		}

@@ -289,70 +289,70 @@ func (e *node) Password() *node {
 }
 
 // KeyboardType is the layout of the on-screen keyboard for a text input.
-type KeyboardType string
+type KeyboardType = platform.KeyboardKind
 
-// The keyboards of phones and tablets. Hardware keyboards and desktops
-// type as they do.
+// The keyboards of phones and tablets. Hardware keyboards and desktops type as
+// they do.
 const (
-	KeyboardDefault KeyboardType = ""
-	KeyboardEmail   KeyboardType = "email"
-	KeyboardNumber  KeyboardType = "number"
-	KeyboardDecimal KeyboardType = "decimal"
-	KeyboardPhone   KeyboardType = "phone"
-	KeyboardURL     KeyboardType = "url"
-	KeyboardSearch  KeyboardType = "search"
+	KeyboardDefault = platform.KeyboardDefault
+	KeyboardEmail   = platform.KeyboardEmail
+	KeyboardNumber  = platform.KeyboardNumber
+	KeyboardDecimal = platform.KeyboardDecimal
+	KeyboardPhone   = platform.KeyboardPhone
+	KeyboardURL     = platform.KeyboardURL
+	KeyboardSearch  = platform.KeyboardSearch
 )
 
 // ReturnKeyType is what the return key of an on-screen keyboard says.
-type ReturnKeyType string
+type ReturnKeyType = platform.ReturnKeyKind
 
-// The return keys of phones and tablets.
+// The return keys of phones and tablets. ReturnNext moves the focus to the
+// next element after it submits.
 const (
-	ReturnDefault ReturnKeyType = ""
-	ReturnDone    ReturnKeyType = "done"
-	ReturnGo      ReturnKeyType = "go"
-	// ReturnNext moves the focus to the next element after it submits.
-	ReturnNext   ReturnKeyType = "next"
-	ReturnSearch ReturnKeyType = "search"
-	ReturnSend   ReturnKeyType = "send"
+	ReturnDefault = platform.ReturnDefault
+	ReturnDone    = platform.ReturnDone
+	ReturnGo      = platform.ReturnGo
+	ReturnNext    = platform.ReturnNext
+	ReturnSearch  = platform.ReturnSearch
+	ReturnSend    = platform.ReturnSend
 )
 
 // Capitalization is what an on-screen keyboard capitalizes as one types.
-type Capitalization string
+type Capitalization = platform.CapitalizeKind
 
 // The capitalizations of on-screen keyboards.
 const (
-	CapitalizeDefault    Capitalization = ""
-	CapitalizeNone       Capitalization = "none"
-	CapitalizeWords      Capitalization = "words"
-	CapitalizeSentences  Capitalization = "sentences"
-	CapitalizeCharacters Capitalization = "characters"
+	CapitalizeDefault    = platform.CapitalizeDefault
+	CapitalizeNone       = platform.CapitalizeNone
+	CapitalizeWords      = platform.CapitalizeWords
+	CapitalizeSentences  = platform.CapitalizeSentences
+	CapitalizeCharacters = platform.CapitalizeCharacters
 )
 
-// AutofillKind names what a text input holds, for the system to offer it
-// from its passwords and contacts.
-type AutofillKind string
+// AutofillKind names what a text input holds, for the system to offer it from
+// its passwords and contacts.
+type AutofillKind = platform.AutofillKind
 
 // The kinds of text the system fills in.
 const (
-	AutofillNone        AutofillKind = ""
-	AutofillUsername    AutofillKind = "username"
-	AutofillPassword    AutofillKind = "password"
-	AutofillNewPassword AutofillKind = "newPassword"
-	AutofillOneTimeCode AutofillKind = "oneTimeCode"
-	AutofillEmail       AutofillKind = "email"
-	AutofillName        AutofillKind = "name"
-	AutofillPhone       AutofillKind = "phone"
-	AutofillAddress     AutofillKind = "address"
-	AutofillPostalCode  AutofillKind = "postalCode"
-	AutofillCreditCard  AutofillKind = "creditCard"
+	AutofillNone        = platform.AutofillNone
+	AutofillUsername    = platform.AutofillUsername
+	AutofillPassword    = platform.AutofillPassword
+	AutofillNewPassword = platform.AutofillNewPassword
+	AutofillOneTimeCode = platform.AutofillOneTimeCode
+	AutofillEmail       = platform.AutofillEmail
+	AutofillName        = platform.AutofillName
+	AutofillPhone       = platform.AutofillPhone
+	AutofillAddress     = platform.AutofillAddress
+	AutofillPostalCode  = platform.AutofillPostalCode
+	AutofillCreditCard  = platform.AutofillCreditCard
 )
 
 // Keyboard chooses the on-screen keyboard's layout for a text input, on
 // phones and tablets.
 func (e *node) Keyboard(k KeyboardType) *node {
 	if e.hasState() {
-		e.st.traits.Keyboard = string(k)
+		e.st.traits.Keyboard = k
 	}
 	return e
 }
@@ -362,7 +362,7 @@ func (e *node) Keyboard(k KeyboardType) *node {
 // the focus on as well.
 func (e *node) ReturnKey(k ReturnKeyType) *node {
 	if e.hasState() {
-		e.st.traits.ReturnKey = string(k)
+		e.st.traits.ReturnKey = k
 	}
 	return e
 }
@@ -370,7 +370,7 @@ func (e *node) ReturnKey(k ReturnKeyType) *node {
 // Capitalize sets what an on-screen keyboard capitalizes as one types.
 func (e *node) Capitalize(c Capitalization) *node {
 	if e.hasState() {
-		e.st.traits.Capitalize = string(c)
+		e.st.traits.Capitalize = c
 	}
 	return e
 }
@@ -379,9 +379,9 @@ func (e *node) Capitalize(c Capitalization) *node {
 // or off for a text input, on by default where the keyboard has them.
 func (e *node) Autocorrect(on bool) *node {
 	if e.hasState() {
-		e.st.traits.Autocorrect = "off"
+		e.st.traits.Autocorrect = platform.AutocorrectOff
 		if on {
-			e.st.traits.Autocorrect = "on"
+			e.st.traits.Autocorrect = platform.AutocorrectOn
 		}
 	}
 	return e
@@ -392,7 +392,7 @@ func (e *node) Autocorrect(on bool) *node {
 // keyboard.
 func (e *node) Autofill(k AutofillKind) *node {
 	if e.hasState() {
-		e.st.traits.Autofill = string(k)
+		e.st.traits.Autofill = k
 	}
 	return e
 }

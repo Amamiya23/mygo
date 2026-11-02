@@ -40,6 +40,7 @@ func (e *node) PullToRefresh(s *RefreshState) bool {
 	}
 	st, rt := e.st, e.c.rt
 	st.refresh = s
+	refreshPainter = (*Painter).paintRefresh
 	if s.was != s.Refreshing {
 		s.was = s.Refreshing
 		if !st.refreshFired {

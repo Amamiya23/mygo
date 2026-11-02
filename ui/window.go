@@ -316,24 +316,20 @@ func (h *windowHost) event(ev platform.SurfaceEvent) bool {
 		h.requestFrame()
 		return false
 	}
-	if ev.Kind == platform.SurfaceBackGesture {
-		h.rt.backGesture(ev.Text, float32(ev.Scale))
-		return false
-	}
-	if ev.Kind == platform.SurfaceScrollToTop {
-		h.rt.scrollToTop()
-		return false
-	}
-	if ev.Kind == platform.SurfaceLowMemory {
-		// What the next frame makes again: the renderer's textures, its
-		// atlases and pipelines among them.
-		if h.gpu != nil {
-			h.gpu.Release()
-			h.gpu = nil
-			h.gpuTried, h.retryAt = false, time.Time{}
+	if ev.Kind >= platform.SurfaceLowMemory && ev.Kind <= platform.SurfaceScrollToTop {
+		if ev.Kind == platform.SurfaceLowMemory {
+			// What the next frame makes again: the renderer's textures, its
+			// atlases and pipelines among them.
+			if h.gpu != nil {
+				h.gpu.Release()
+				h.gpu = nil
+				h.gpuTried, h.retryAt = false, time.Time{}
+			}
+			h.requestFrame()
 		}
-		h.rt.lowMemory()
-		h.requestFrame()
+		if touchSystem != nil {
+			touchSystem(h.rt, ev)
+		}
 		return false
 	}
 	if ev.Kind == platform.WebViewTabOut {

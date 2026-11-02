@@ -280,7 +280,7 @@ func (ed *editor) key(c *context, st *state, k editEvent) {
 			st.markSubmitted()
 			st.submitMods = k.mods
 			c.rt.consumed = true
-			if st.traits.ReturnKey == "next" {
+			if st.traits.ReturnKey == ReturnNext {
 				c.rt.moveFocus(false)
 			}
 		}

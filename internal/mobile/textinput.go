@@ -18,6 +18,15 @@ import (
 // gets: a document may be large, and a keyboard reads around the caret.
 const textWindow = 1 << 12
 
+// The hosts' names of what platform.TextTraits numbers.
+var (
+	keyboardNames    = [...]string{"", "email", "number", "decimal", "phone", "url", "search"}
+	returnNames      = [...]string{"", "done", "go", "next", "search", "send"}
+	capitalizeNames  = [...]string{"", "none", "words", "sentences", "characters"}
+	autocorrectNames = [...]string{"", "on", "off"}
+	autofillNames    = [...]string{"", "username", "password", "newPassword", "oneTimeCode", "email", "name", "phone", "address", "postalCode", "creditCard"}
+)
+
 // SetTextInput shows the keyboard while an element takes text, and gives the
 // host its traits and the text around the caret.
 func (s *surface) SetTextInput(t platform.TextInputState) {
@@ -34,8 +43,8 @@ func (s *surface) syncText() {
 	st := s.snapshot()
 	m := wire.SetTextInput{ID: s.w.id, Active: t.Active, Show: int(t.ShowKeyboard), Document: t.Client != nil,
 		X: st.X, Y: st.Y, Width: st.Width, Height: st.Height,
-		Multiline: t.Traits.Multiline, Secure: t.Traits.Secure, Keyboard: t.Traits.Keyboard, ReturnKey: t.Traits.ReturnKey,
-		Capitalize: t.Traits.Capitalize, Autocorrect: t.Traits.Autocorrect, Autofill: t.Traits.Autofill,
+		Multiline: t.Traits.Multiline, Secure: t.Traits.Secure, Keyboard: keyboardNames[t.Traits.Keyboard], ReturnKey: returnNames[t.Traits.ReturnKey],
+		Capitalize: capitalizeNames[t.Traits.Capitalize], Autocorrect: autocorrectNames[t.Traits.Autocorrect], Autofill: autofillNames[t.Traits.Autofill],
 		Text: st.Text, Base: st.Base, Length: st.Length, SelStart: st.SelStart, SelEnd: st.SelEnd, MarkStart: st.MarkStart, MarkEnd: st.MarkEnd}
 	if m == s.textSent {
 		return

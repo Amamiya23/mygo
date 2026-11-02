@@ -235,25 +235,79 @@ type TextInputState struct {
 }
 
 // TextTraits describe a text input to on-screen keyboards, as phones have.
-// Other platforms ignore them. Empty values are the keyboard's defaults.
+// Other platforms ignore them. Zero values are the keyboard's defaults.
 type TextTraits struct {
-	// Keyboard is the layout: "email", "number", "decimal", "phone", "url"
-	// or "search".
-	Keyboard string
-	// ReturnKey is what the return key says: "done", "go", "next", "search"
-	// or "send".
-	ReturnKey string
-	// Capitalize is "none", "words", "sentences" or "characters".
-	Capitalize string
-	// Autocorrect is "on" or "off".
-	Autocorrect string
-	// Autofill names what the input holds, for the system's passwords and
-	// contacts: "username", "password", "newPassword", "oneTimeCode",
-	// "email", "name", "phone", "address", "postalCode", "creditCard".
-	Autofill string
+	Keyboard    KeyboardKind
+	ReturnKey   ReturnKeyKind
+	Capitalize  CapitalizeKind
+	Autocorrect AutocorrectKind
+	Autofill    AutofillKind
 	// Multiline and Secure tell a text area and a password field.
 	Multiline, Secure bool
 }
+
+// KeyboardKind is the layout of an on-screen keyboard.
+type KeyboardKind uint8
+
+const (
+	KeyboardDefault KeyboardKind = iota
+	KeyboardEmail
+	KeyboardNumber
+	KeyboardDecimal
+	KeyboardPhone
+	KeyboardURL
+	KeyboardSearch
+)
+
+// ReturnKeyKind is what the return key of an on-screen keyboard says.
+type ReturnKeyKind uint8
+
+const (
+	ReturnDefault ReturnKeyKind = iota
+	ReturnDone
+	ReturnGo
+	ReturnNext
+	ReturnSearch
+	ReturnSend
+)
+
+// CapitalizeKind is what an on-screen keyboard capitalizes.
+type CapitalizeKind uint8
+
+const (
+	CapitalizeDefault CapitalizeKind = iota
+	CapitalizeNone
+	CapitalizeWords
+	CapitalizeSentences
+	CapitalizeCharacters
+)
+
+// AutocorrectKind is whether an on-screen keyboard corrects what is typed.
+type AutocorrectKind uint8
+
+const (
+	AutocorrectDefault AutocorrectKind = iota
+	AutocorrectOn
+	AutocorrectOff
+)
+
+// AutofillKind names what an input holds, for the system's passwords and
+// contacts.
+type AutofillKind uint8
+
+const (
+	AutofillNone AutofillKind = iota
+	AutofillUsername
+	AutofillPassword
+	AutofillNewPassword
+	AutofillOneTimeCode
+	AutofillEmail
+	AutofillName
+	AutofillPhone
+	AutofillAddress
+	AutofillPostalCode
+	AutofillCreditCard
+)
 
 // SurfaceNative holds the native objects of a Surface.
 type SurfaceNative struct {
