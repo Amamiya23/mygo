@@ -768,6 +768,8 @@ object HostImpl : HostCalls {
     override fun accessibilityChanged(c: AccessibilityChangedCall) { surface(c.id)?.accessibilityChanged(c.focus) }
     override fun announce(c: AnnounceCall) { (front()?.view ?: root).announceForAccessibility(c.text) }
     override fun showMenu(c: ShowMenuCall) { surface(c.id)?.showMenu(c) }
+    override fun showMagnifier(c: ShowMagnifierCall) { surface(c.id)?.showMagnifier(c) }
+    override fun hideMagnifier(c: HideMagnifierCall) { surface(c.id)?.hideMagnifier() }
     override fun textMetrics(c: TextMetricsCall): TextMetricsReply = Text.metrics(c)
     override fun measureText(c: MeasureTextCall): MeasureTextReply = Text.measure(c)
     override fun textAdvances(c: TextAdvancesCall): TextAdvancesReply = Text.advances(c)

@@ -471,6 +471,10 @@ type engine struct {
 	// touch is the finger on a touch screen, flinging the content it
 	// flung as it lifted (touch.go).
 	touch    touchPan
+	// touchText is the handles of the selection, for fingers; keyboardWas
+	// the keyboard's inset as the last frame laid out.
+	touchText   touchText
+	keyboardWas float64
 	flinging fling
 	// wheeling are the elements of the scroll containers that the notches
 	// of a mouse wheel scroll smoothly (glideWheels).
@@ -1505,6 +1509,11 @@ func (rt *engine) padInsets(root *node) {
 		return
 	}
 	in := h.insets()
+	if in.Bottom > rt.keyboardWas+40 {
+		// The keyboard came up: what it covers of the input in use shows.
+		rt.revealFocus()
+	}
+	rt.keyboardWas = in.Bottom
 	if in == (platform.Insets{}) {
 		return
 	}

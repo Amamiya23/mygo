@@ -394,3 +394,61 @@ func TestTouchDraggableAroundClickable(t *testing.T) {
 		t.Errorf("%d clicks, dragged to %v", clicks, off.X)
 	}
 }
+
+// A finger holding a word chooses it; the handles at its ends drag them.
+func TestTouchTextHandles(t *testing.T) {
+	defer func(k overscroll) { overscrollKind = k }(overscrollKind)
+	overscrollKind = overscrollBounce
+	v := "hello big world"
+	var in *node
+	tt := coreNewTester(func(c *context) {
+		in = coreTextInput(c, &v).Fill().AutoFocus()
+	}, 300, 60)
+	tt.Frame()
+	tt.Frame()
+	tt.TouchDown(20, 30)
+	tt.Advance(600 * time.Millisecond)
+	tt.TouchUp(20, 30)
+	tt.Frame()
+	if got := in.st.editor.selectedText(); got != "hello" {
+		t.Fatalf("held: chose %q", got)
+	}
+	_, _, end, sel, ok := tt.rt.handles()
+	if !ok || sel.End != 5 {
+		t.Fatalf("handles: %v %v", ok, sel)
+	}
+	// The end handle, dragged to the end of the text.
+	x, y := float32(end.X), float32(end.Y+end.H)
+	tt.TouchDown(x, y)
+	if tt.rt.touchText.held != handleEnd {
+		t.Fatalf("near the end handle, it holds %d", tt.rt.touchText.held)
+	}
+	tt.TouchMove(x+200, y)
+	tt.Frame()
+	tt.TouchUp(x+200, y)
+	tt.Frame()
+	if got := in.st.editor.selectedText(); got != "hello big world" {
+		t.Errorf("dragged to the end: chose %q", got)
+	}
+}
+
+// The keyboard coming up shows the input in use.
+func TestKeyboardRevealsFocus(t *testing.T) {
+	v := ""
+	var s ScrollState
+	tt := coreNewTester(func(c *context) {
+		coreScroll(c).Fill().TrackScroll(&s).Children(func() {
+			coreBox(c).Height(500).Shrink(0)
+			coreTextInput(c, &v).AutoFocus()
+		})
+	}, 300, 600)
+	tt.Frame()
+	tt.Frame()
+	y0 := s.Y
+	tt.SetInsets(0, 0, 300, 0)
+	tt.Frame()
+	tt.Frame()
+	if s.Y <= y0 {
+		t.Errorf("under the keyboard: scrolled from %v to %v", y0, s.Y)
+	}
+}

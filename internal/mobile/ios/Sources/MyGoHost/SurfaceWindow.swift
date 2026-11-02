@@ -421,7 +421,56 @@ final class SurfaceWindow: HostWindow, UITextInput {
         Go.answer(Event.accessibilityAction(id: id, node: node, action: action)) { AccessibilityActionReply(&$0).handled } ?? false
     }
 
-    func showMenu(_ c: ShowMenuCall) {}
+    // The system's edit menu: UIEditMenuInteraction asks this view, the first
+    // responder, what it can do, and calls it.
+
+    private var menuActions: [String] = []
+    private lazy var editMenu: UIEditMenuInteraction = {
+        let i = UIEditMenuInteraction(delegate: nil)
+        addInteraction(i)
+        return i
+    }()
+
+    func showMenu(_ c: ShowMenuCall) {
+        menuActions = c.actions
+        if !isFirstResponder { becomeFirstResponder() }
+        let cfg = UIEditMenuConfiguration(identifier: nil, sourcePoint: CGPoint(x: c.x, y: c.y))
+        cfg.preferredArrowDirection = .down
+        editMenu.presentEditMenu(with: cfg)
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        switch action {
+        case #selector(UIResponderStandardEditActions.cut(_:)): return menuActions.contains("cut")
+        case #selector(UIResponderStandardEditActions.copy(_:)): return menuActions.contains("copy")
+        case #selector(UIResponderStandardEditActions.paste(_:)): return menuActions.contains("paste")
+        case #selector(UIResponderStandardEditActions.selectAll(_:)): return menuActions.contains("selectAll")
+        default: return false
+        }
+    }
+
+    override func cut(_ sender: Any?) { edit(Event.textCommand(id: id, command: "cut")) }
+    override func copy(_ sender: Any?) { edit(Event.textCommand(id: id, command: "copy")) }
+    override func paste(_ sender: Any?) { edit(Event.textCommand(id: id, command: "paste")) }
+    override func selectAll(_ sender: Any?) { edit(Event.textCommand(id: id, command: "selectAll")) }
+
+    // The system's magnifier, while a finger drags a handle.
+
+    private var loupe: UITextLoupeSession?
+
+    func showMagnifier(_ c: ShowMagnifierCall) {
+        let at = CGPoint(x: c.x, y: c.y)
+        if let l = loupe {
+            l.move(to: at, withCaretRect: caret, trackingCaret: true)
+        } else {
+            loupe = UITextLoupeSession.begin(at: at, fromSelectionWidgetView: nil, in: self)
+        }
+    }
+
+    func hideMagnifier() {
+        loupe?.invalidate()
+        loupe = nil
+    }
 }
 
 /// A position in the text being edited, in characters.

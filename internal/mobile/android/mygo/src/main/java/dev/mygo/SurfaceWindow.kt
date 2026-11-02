@@ -6,7 +6,11 @@ import android.os.Bundle
 import android.text.InputType
 import android.view.Choreographer
 import android.view.InputDevice
+import android.view.ActionMode
 import android.view.KeyEvent
+import android.view.Magnifier
+import android.view.Menu
+import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -128,7 +132,44 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
     }
 
     fun setCursor(cursor: String) {}
-    fun showMenu(c: ShowMenuCall) {}
+
+    private var actionMode: ActionMode? = null
+
+    /** The system's floating menu of the editing commands asked for. */
+    fun showMenu(c: ShowMenuCall) {
+        actionMode?.finish()
+        val d = density
+        val at = Rect((c.x * d).toInt(), (c.y * d).toInt(), (c.x * d).toInt() + 1, (c.y * d).toInt() + 1)
+        actionMode = surface.startActionMode(object : ActionMode.Callback2() {
+            override fun onCreateActionMode(m: ActionMode, menu: Menu): Boolean {
+                val labels = mapOf("cut" to android.R.string.cut, "copy" to android.R.string.copy,
+                    "paste" to android.R.string.paste, "selectAll" to android.R.string.selectAll)
+                c.actions.forEachIndexed { i, name -> labels[name]?.let { menu.add(0, i, i, it) } }
+                return true
+            }
+            override fun onPrepareActionMode(m: ActionMode, menu: Menu) = false
+            override fun onActionItemClicked(m: ActionMode, item: MenuItem): Boolean {
+                c.actions.getOrNull(item.itemId)?.let { edit(Event.textCommand(wid, it)) }
+                m.finish()
+                return true
+            }
+            override fun onDestroyActionMode(m: ActionMode) { actionMode = null }
+            override fun onGetContentRect(m: ActionMode, v: View, out: Rect) { out.set(at) }
+        }, ActionMode.TYPE_FLOATING)
+    }
+
+    private var magnifier: Magnifier? = null // API 28
+
+    /** The system's magnifier of what is at a point. */
+    fun showMagnifier(c: ShowMagnifierCall) {
+        if (android.os.Build.VERSION.SDK_INT < 28) return
+        val m = magnifier ?: Magnifier.Builder(surface).build().also { magnifier = it }
+        m.show((c.x * density).toFloat(), (c.y * density).toFloat())
+    }
+
+    fun hideMagnifier() {
+        if (android.os.Build.VERSION.SDK_INT >= 28) magnifier?.dismiss()
+    }
 
     fun accessibilityChanged(focus: Long) {
         nodes = null

@@ -947,16 +947,9 @@ func (h *windowHost) tabIntoWebView(v NativeWebView, back bool) {
 	}
 }
 
-func (h *windowHost) haptic(kind string) {
-	if s, ok := h.conn.Surface.(platform.TouchSurface); ok {
-		s.Haptic(kind)
-	}
-}
-
-func (h *windowHost) showEditMenu(x, y float64) {
-	if s, ok := h.conn.Surface.(platform.TouchSurface); ok {
-		s.ShowEditMenu(x, y)
-	}
+func (h *windowHost) touchSurface() platform.TouchSurface {
+	s, _ := h.conn.Surface.(platform.TouchSurface)
+	return s
 }
 
 func (h *windowHost) popupMenu(m *platform.Menu, x, y float32, chosen func(int)) {

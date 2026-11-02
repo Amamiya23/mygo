@@ -92,6 +92,9 @@ func (rt *engine) paint(root *node, w, h, scale float32) {
 	p.cull = !rt.inkStale && !rt.noCull
 	p.element(root)
 	p.cull = false
+	if touchPaint != nil {
+		touchPaint(rt, p)
+	}
 	if rt.insp.open {
 		rt.insp.paintHighlight(rt, p, h)
 	}

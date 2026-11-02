@@ -24,6 +24,7 @@ import (
 var (
 	touchInput func(rt *engine, ev platform.SurfaceEvent, x, y float32) bool
 	touchFrame func(rt *engine, now time.Time)
+	touchPaint func(rt *engine, p *Painter)
 	// insetRoot keeps the content out from under what covers the
 	// window's edges, which only phones' do.
 	insetRoot     func(rt *engine, root *node)
@@ -34,6 +35,7 @@ var (
 func enableTouch() {
 	touchInput = (*engine).touchEvent
 	touchFrame = (*engine).touchStep
+	touchPaint = (*engine).paintHandles
 	insetRoot = (*engine).padInsets
 	extendScrolls = (*engine).extendUnderBottom
 }
@@ -120,6 +122,10 @@ type touchPan struct {
 	// press gave the finger to the mouse's handling, to drag what it holds.
 	holds    uint64
 	dragging bool
+	// textBefore is the input with the focus as it went down, and selBefore
+	// its selection then.
+	textBefore uint64
+	selBefore  platform.TextRange
 	// samples are its last positions, for its speed as it lifts.
 	samples [6]touchSample
 	n       int
@@ -148,6 +154,14 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		*t = touchPan{down: true, x0: x, y0: y, lx: x, ly: y, at: rt.now()}
 		t.sample(rt.now(), x, y)
 		rt.catchBounces()
+		if h := rt.handleAt(x, y); h != handleNone {
+			rt.touchText.held = h
+			return true
+		}
+		t.textBefore = rt.focused
+		if s := rt.states[rt.focused]; s != nil && s.textAdapter != nil {
+			t.selBefore = s.textAdapter.Selection().Range
+		}
 		if rt.flinging.on {
 			// A finger stops content flinging, and taps nothing.
 			rt.flinging.on = false
@@ -165,6 +179,10 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 	case platform.PointerMove:
 		if !t.down {
 			return false
+		}
+		if rt.touchText.held != handleNone {
+			rt.dragHandle(x, y)
+			return true
 		}
 		if t.swallow {
 			return true
@@ -215,6 +233,15 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		}
 		was := *t
 		t.down, t.waiting, t.holds = false, false, 0
+		if rt.touchText.held != handleNone {
+			rt.touchText.held = handleNone
+			rt.touchSurface(func(s platform.TouchSurface) { s.HideMagnifier() })
+			if s := rt.states[rt.touchText.id]; s != nil {
+				rt.showEditMenu(s)
+			}
+			rt.requestFrame()
+			return true
+		}
 		if was.swallow {
 			return true
 		}
@@ -224,9 +251,11 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		if was.waiting {
 			// A tap quicker than the delay: it presses, and lets go.
 			rt.pressNow(was)
+			rt.afterTap(&was)
 			return false
 		}
 		if !was.panning {
+			rt.afterTap(&was)
 			return false
 		}
 		t.sample(rt.now(), x, y)
@@ -254,6 +283,16 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		return t.panning || t.swallow
 	}
 	return false
+}
+
+// afterTap notes what a finger's tap did to a text input.
+func (rt *engine) afterTap(was *touchPan) {
+	s := rt.states[rt.focused]
+	if s == nil || s.textAdapter == nil {
+		rt.touchText.id = 0
+		return
+	}
+	rt.textTapped(s, was.textBefore == rt.focused, was.selBefore)
 }
 
 // overScroller reports whether a finger at x, y is on what scrolls, whose
@@ -751,9 +790,12 @@ func (rt *engine) longPress(t *touchPan) {
 	case s.flags&flagEditable != 0 || s.flags&flagSelectable != 0:
 		// A word chosen, as a double click does.
 		rt.cancelPress()
+		// As the second press of two on it, whatever it was pressed before.
+		rt.lastPress.prev, rt.lastPress.base = s.id, 0
 		rt.pointerDown(x, y, 0, rt.mods, 2)
 		rt.pointerUp(0, 2)
 		t.swallow = true
+		rt.touchText.id = s.id
 		rt.showEditMenu(s)
 	default:
 		// The context menu, as the secondary button does.
@@ -766,21 +808,7 @@ func (rt *engine) longPress(t *touchPan) {
 
 // haptic plays a feel of the system's, on a device that has them.
 func (rt *engine) haptic(kind string) {
-	if h, ok := rt.host.(interface{ haptic(string) }); ok {
-		h.haptic(kind)
-	}
-}
-
-// showEditMenu shows the system's edit menu at the selection of s (cut, copy,
-// paste, select all), after a long press selected a word.
-func (rt *engine) showEditMenu(s *state) {
-	h, ok := rt.host.(interface{ showEditMenu(x, y float64) })
-	if !ok {
-		return
-	}
-	r := transformRect(s.world, Rect{X: s.x, Y: s.y, W: s.w, H: s.h})
-	w := rt.toWindow(platform.RectF{X: float64(r.X + r.W/2), Y: float64(r.Y), W: 0, H: 0})
-	h.showEditMenu(w.X, w.Y)
+	rt.touchSurface(func(s platform.TouchSurface) { s.Haptic(kind) })
 }
 
 // lowMemory lets go of what the next frame makes again.

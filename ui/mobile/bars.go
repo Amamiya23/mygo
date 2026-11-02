@@ -62,6 +62,10 @@ func TopBar(c *ui.Context, o TopBarOptions) ui.Element {
 	return bar
 }
 
+// keyboardAtLeast tells a keyboard from the system's bars in the window's
+// bottom inset: they are far less tall.
+const keyboardAtLeast = 120
+
 // BarButton is a destination of a BottomBar.
 type BarButton struct {
 	Label string
@@ -81,6 +85,10 @@ func BottomBar(c *ui.Context, selected *int, buttons ...BarButton) ui.Element {
 	// Down to the screen's edge, under the system's bar: the window's root
 	// keeps its content above it.
 	bar := ui.Row(c).FillWidth().Background(t.Surface).Padding(0, 0, bottom, 0).Margin(0, 0, -bottom, 0).Shrink(0).Role(ui.RoleTabList)
+	if bottom > keyboardAtLeast {
+		// The keyboard covers it, as it does the system's.
+		return bar.Hidden(true)
+	}
 	height := float32(49)
 	if Current() == Material {
 		height = 80

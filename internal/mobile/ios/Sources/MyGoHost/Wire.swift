@@ -891,17 +891,35 @@ public struct AnnounceCall {
 
 public struct ShowMenuCall {
     public var id: Int = 0
-    public var req: Int = 0
     public var x: Double = 0
     public var y: Double = 0
     public var actions: [String] = []
     public init() {}
     init(_ r: inout WireReader) {
         id = r.int()
-        req = r.int()
         x = r.float()
         y = r.float()
         actions = r.strings()
+    }
+}
+
+public struct ShowMagnifierCall {
+    public var id: Int = 0
+    public var x: Double = 0
+    public var y: Double = 0
+    public init() {}
+    init(_ r: inout WireReader) {
+        id = r.int()
+        x = r.float()
+        y = r.float()
+    }
+}
+
+public struct HideMagnifierCall {
+    public var id: Int = 0
+    public init() {}
+    init(_ r: inout WireReader) {
+        id = r.int()
     }
 }
 
@@ -1148,8 +1166,11 @@ public protocol HostCalls: AnyObject {
     /// the tree of accessible elements changed; Focus names the one with the focus
     func accessibilityChanged(_ c: AccessibilityChangedCall)
     func announce(_ c: AnnounceCall)
-    /// the system's edit menu at a point, with the actions given (cut, copy, paste, selectAll and labels); MenuChosen answers
+    /// the system's edit menu at a point, with the actions given (cut, copy, paste, selectAll); TextCommand answers
     func showMenu(_ c: ShowMenuCall)
+    /// the system's magnifier of what is at a point
+    func showMagnifier(_ c: ShowMagnifierCall)
+    func hideMagnifier(_ c: HideMagnifierCall)
     /// the metrics of a font (Android's Paint): ascent and descent, x-height, underline and strikethrough
     func textMetrics(_ c: TextMetricsCall) -> TextMetricsReply
     /// how wide each of Texts is in a font, kerned unless NoKern
@@ -1372,18 +1393,24 @@ public func dispatchCall(_ h: HostCalls, _ buf: UnsafeRawBufferPointer) -> [UInt
         h.showMenu(ShowMenuCall(&r))
         return nil
     case 69:
+        h.showMagnifier(ShowMagnifierCall(&r))
+        return nil
+    case 70:
+        h.hideMagnifier(HideMagnifierCall(&r))
+        return nil
+    case 71:
         h.textMetrics(TextMetricsCall(&r)).encode(&w)
         return w.buf
-    case 70:
+    case 72:
         h.measureText(MeasureTextCall(&r)).encode(&w)
         return w.buf
-    case 71:
+    case 73:
         h.textAdvances(TextAdvancesCall(&r)).encode(&w)
         return w.buf
-    case 72:
+    case 74:
         h.drawText(DrawTextCall(&r)).encode(&w)
         return w.buf
-    case 73:
+    case 75:
         h.registerFont(RegisterFontCall(&r)).encode(&w)
         return w.buf
     default:
@@ -1821,25 +1848,17 @@ public enum Event {
         w.int(id)
         return w.buf
     }
-    public static func menuChosen(id: Int, req: Int, action: String) -> [UInt8] {
-        var w = WireWriter()
-        w.uvarint(53)
-        w.int(id)
-        w.int(req)
-        w.string(action)
-        return w.buf
-    }
     /// the accessible elements, encoded as Nodes: for each, its ID, parent, role, label, value, hint, frame and actions
     public static func accessibilityTree(id: Int) -> [UInt8] {
         var w = WireWriter()
-        w.uvarint(54)
+        w.uvarint(53)
         w.int(id)
         return w.buf
     }
     /// an assistive technology's action on an element: "press", "increment", "decrement", "focus", "scrollForward", …
     public static func accessibilityAction(id: Int, node: Int, action: String) -> [UInt8] {
         var w = WireWriter()
-        w.uvarint(55)
+        w.uvarint(54)
         w.int(id)
         w.int(node)
         w.string(action)

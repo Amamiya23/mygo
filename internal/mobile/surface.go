@@ -185,9 +185,15 @@ func (s *surface) UpdateAccessibility(tree *platform.AccessTree) {
 
 func (s *surface) Haptic(kind string) { s.w.b.Haptic(kind) }
 
-func (s *surface) ShowEditMenu(x, y float64) {
-	s.w.b.call(&wire.ShowMenu{ID: s.w.id, X: x, Y: y, Actions: []string{"cut", "copy", "paste", "selectAll"}}, nil)
+func (s *surface) ShowEditMenu(x, y float64, actions []string) {
+	s.w.b.call(&wire.ShowMenu{ID: s.w.id, X: x, Y: y, Actions: actions}, nil)
 }
+
+func (s *surface) ShowMagnifier(x, y float64) {
+	s.w.b.call(&wire.ShowMagnifier{ID: s.w.id, X: x, Y: y}, nil)
+}
+
+func (s *surface) HideMagnifier() { s.w.b.call(&wire.HideMagnifier{ID: s.w.id}, nil) }
 
 func (s *surface) StartDataDrag(platform.DragRequest)        {}
 func (s *surface) CancelDataDrag()                           {}
@@ -460,12 +466,6 @@ func (b *Backend) handleSurface(op uint64, r *wire.Reader, w *wire.Writer) bool 
 	case wire.EventTextReplace, wire.EventTextMark, wire.EventTextUnmark, wire.EventTextDelete, wire.EventTextSelect,
 		wire.EventTextCommand, wire.EventTextState, wire.EventTextRange, wire.EventTextBounds, wire.EventTextIndexAt, wire.EventTextInputEnded:
 		b.textEvent(op, r, w)
-	case wire.EventMenuChosen:
-		var e wire.MenuChosenEvent
-		e.Decode(r)
-		if s := sf(e.ID); s != nil && e.Action != "" {
-			s.send(platform.SurfaceEvent{Kind: platform.SurfaceCommand, Text: e.Action})
-		}
 	case wire.EventAccessibilityTree:
 		var e wire.AccessibilityTreeEvent
 		e.Decode(r)

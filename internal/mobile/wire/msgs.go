@@ -72,11 +72,13 @@ const (
 	CallAccessibilityChanged   = 66
 	CallAnnounce               = 67
 	CallShowMenu               = 68
-	CallTextMetrics            = 69
-	CallMeasureText            = 70
-	CallTextAdvances           = 71
-	CallDrawText               = 72
-	CallRegisterFont           = 73
+	CallShowMagnifier          = 69
+	CallHideMagnifier          = 70
+	CallTextMetrics            = 71
+	CallMeasureText            = 72
+	CallTextAdvances           = 73
+	CallDrawText               = 74
+	CallRegisterFont           = 75
 )
 
 // Numbers of events.
@@ -133,9 +135,8 @@ const (
 	EventTextBounds          = 50
 	EventTextIndexAt         = 51
 	EventTextInputEnded      = 52
-	EventMenuChosen          = 53
-	EventAccessibilityTree   = 54
-	EventAccessibilityAction = 55
+	EventAccessibilityTree   = 53
+	EventAccessibilityAction = 54
 )
 
 // AppInfo is the app's bundle and the system's settings, asked once at start.
@@ -1314,10 +1315,9 @@ func (m *Announce) Encode(w *Writer) {
 // Wait reports whether the caller waits for the host to run it.
 func (*Announce) Wait() bool { return false }
 
-// ShowMenu is the system's edit menu at a point, with the actions given (cut, copy, paste, selectAll and labels); MenuChosen answers.
+// ShowMenu is the system's edit menu at a point, with the actions given (cut, copy, paste, selectAll); TextCommand answers.
 type ShowMenu struct {
 	ID      int
-	Req     int
 	X       float64
 	Y       float64
 	Actions []string
@@ -1326,7 +1326,6 @@ type ShowMenu struct {
 func (m *ShowMenu) Encode(w *Writer) {
 	w.Uvarint(CallShowMenu)
 	w.Int(m.ID)
-	w.Int(m.Req)
 	w.Float(m.X)
 	w.Float(m.Y)
 	w.Strings(m.Actions)
@@ -1334,6 +1333,35 @@ func (m *ShowMenu) Encode(w *Writer) {
 
 // Wait reports whether the caller waits for the host to run it.
 func (*ShowMenu) Wait() bool { return false }
+
+// ShowMagnifier is the system's magnifier of what is at a point.
+type ShowMagnifier struct {
+	ID int
+	X  float64
+	Y  float64
+}
+
+func (m *ShowMagnifier) Encode(w *Writer) {
+	w.Uvarint(CallShowMagnifier)
+	w.Int(m.ID)
+	w.Float(m.X)
+	w.Float(m.Y)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*ShowMagnifier) Wait() bool { return false }
+
+type HideMagnifier struct {
+	ID int
+}
+
+func (m *HideMagnifier) Encode(w *Writer) {
+	w.Uvarint(CallHideMagnifier)
+	w.Int(m.ID)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*HideMagnifier) Wait() bool { return false }
 
 // TextMetrics is the metrics of a font (Android's Paint): ascent and descent, x-height, underline and strikethrough.
 type TextMetrics struct {
@@ -2278,18 +2306,6 @@ type TextInputEndedEvent struct {
 
 func (m *TextInputEndedEvent) Decode(r *Reader) {
 	m.ID = r.Int()
-}
-
-type MenuChosenEvent struct {
-	ID     int
-	Req    int
-	Action string
-}
-
-func (m *MenuChosenEvent) Decode(r *Reader) {
-	m.ID = r.Int()
-	m.Req = r.Int()
-	m.Action = r.String()
 }
 
 // AccessibilityTreeEvent is the accessible elements, encoded as Nodes: for each, its ID, parent, role, label, value, hint, frame and actions.

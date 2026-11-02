@@ -127,6 +127,7 @@ func (a *textInputAdapter) changed() { a.rt.requestFrame(); a.rt.updateTextInput
 func (a *textInputAdapter) ReplaceText(r *platform.TextRange, s string) {
 	if c, _ := a.client(); c != nil {
 		c.ReplaceText(r, s)
+		a.rt.textKeyed()
 		a.changed()
 	}
 }

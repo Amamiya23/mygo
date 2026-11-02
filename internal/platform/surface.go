@@ -155,9 +155,14 @@ type InsetSurface interface {
 type TouchSurface interface {
 	// Haptic plays a haptic (DeviceBackend.Haptic).
 	Haptic(kind string)
-	// ShowEditMenu shows the system's menu of editing commands at a point in
-	// DIPs: cut, copy, paste and select all, which come as SurfaceCommand.
-	ShowEditMenu(x, y float64)
+	// ShowEditMenu shows the system's menu of the editing commands named, of
+	// "cut", "copy", "paste" and "selectAll", at a point in DIPs; they come as
+	// SurfaceCommand.
+	ShowEditMenu(x, y float64, actions []string)
+	// ShowMagnifier shows the system's magnifier of what is at a point in
+	// DIPs, as a finger drags a text handle, until HideMagnifier.
+	ShowMagnifier(x, y float64)
+	HideMagnifier()
 }
 
 // IdleSurface is a Surface that can give back memory once frames stop.

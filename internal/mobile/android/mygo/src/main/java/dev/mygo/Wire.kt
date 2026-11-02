@@ -912,17 +912,35 @@ class AnnounceCall(
 
 class ShowMenuCall(
     @JvmField var id: Long = 0L,
-    @JvmField var req: Long = 0L,
     @JvmField var x: Double = 0.0,
     @JvmField var y: Double = 0.0,
     @JvmField var actions: List<String> = emptyList(),
 ) {
     constructor(r: WireReader) : this() {
         id = r.int()
-        req = r.int()
         x = r.float()
         y = r.float()
         actions = r.strings()
+    }
+}
+
+class ShowMagnifierCall(
+    @JvmField var id: Long = 0L,
+    @JvmField var x: Double = 0.0,
+    @JvmField var y: Double = 0.0,
+) {
+    constructor(r: WireReader) : this() {
+        id = r.int()
+        x = r.float()
+        y = r.float()
+    }
+}
+
+class HideMagnifierCall(
+    @JvmField var id: Long = 0L,
+) {
+    constructor(r: WireReader) : this() {
+        id = r.int()
     }
 }
 
@@ -1169,8 +1187,11 @@ interface HostCalls {
     /** the tree of accessible elements changed; Focus names the one with the focus */
     fun accessibilityChanged(c: AccessibilityChangedCall)
     fun announce(c: AnnounceCall)
-    /** the system's edit menu at a point, with the actions given (cut, copy, paste, selectAll and labels); MenuChosen answers */
+    /** the system's edit menu at a point, with the actions given (cut, copy, paste, selectAll); TextCommand answers */
     fun showMenu(c: ShowMenuCall)
+    /** the system's magnifier of what is at a point */
+    fun showMagnifier(c: ShowMagnifierCall)
+    fun hideMagnifier(c: HideMagnifierCall)
     /** the metrics of a font (Android's Paint): ascent and descent, x-height, underline and strikethrough */
     fun textMetrics(c: TextMetricsCall): TextMetricsReply
     /** how wide each of Texts is in a font, kerned unless NoKern */
@@ -1256,11 +1277,13 @@ fun dispatchCall(h: HostCalls, buf: ByteArray): ByteArray? {
         66 -> h.accessibilityChanged(AccessibilityChangedCall(r))
         67 -> h.announce(AnnounceCall(r))
         68 -> h.showMenu(ShowMenuCall(r))
-        69 -> { h.textMetrics(TextMetricsCall(r)).encode(w); return w.toByteArray() }
-        70 -> { h.measureText(MeasureTextCall(r)).encode(w); return w.toByteArray() }
-        71 -> { h.textAdvances(TextAdvancesCall(r)).encode(w); return w.toByteArray() }
-        72 -> { h.drawText(DrawTextCall(r)).encode(w); return w.toByteArray() }
-        73 -> { h.registerFont(RegisterFontCall(r)).encode(w); return w.toByteArray() }
+        69 -> h.showMagnifier(ShowMagnifierCall(r))
+        70 -> h.hideMagnifier(HideMagnifierCall(r))
+        71 -> { h.textMetrics(TextMetricsCall(r)).encode(w); return w.toByteArray() }
+        72 -> { h.measureText(MeasureTextCall(r)).encode(w); return w.toByteArray() }
+        73 -> { h.textAdvances(TextAdvancesCall(r)).encode(w); return w.toByteArray() }
+        74 -> { h.drawText(DrawTextCall(r)).encode(w); return w.toByteArray() }
+        75 -> { h.registerFont(RegisterFontCall(r)).encode(w); return w.toByteArray() }
     }
     return null
 }
@@ -1695,25 +1718,17 @@ object Event {
         w.int(id)
         return w.toByteArray()
     }
-    @JvmStatic fun menuChosen(id: Long, req: Long, action: String): ByteArray {
-        val w = WireWriter()
-        w.uvarint(53)
-        w.int(id)
-        w.int(req)
-        w.string(action)
-        return w.toByteArray()
-    }
     /** the accessible elements, encoded as Nodes: for each, its ID, parent, role, label, value, hint, frame and actions */
     @JvmStatic fun accessibilityTree(id: Long): ByteArray {
         val w = WireWriter()
-        w.uvarint(54)
+        w.uvarint(53)
         w.int(id)
         return w.toByteArray()
     }
     /** an assistive technology's action on an element: "press", "increment", "decrement", "focus", "scrollForward", … */
     @JvmStatic fun accessibilityAction(id: Long, node: Long, action: String): ByteArray {
         val w = WireWriter()
-        w.uvarint(55)
+        w.uvarint(54)
         w.int(id)
         w.int(node)
         w.string(action)
