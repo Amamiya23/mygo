@@ -60,6 +60,7 @@ object Text {
         return paint
     }
 
+    @Synchronized
     fun metrics(c: TextMetricsCall): TextMetricsReply {
         val p = set(c.family, c.size, c.weight, c.italic)
         val m = p.fontMetrics
@@ -80,6 +81,7 @@ object Text {
         return r
     }
 
+    @Synchronized
     fun measure(c: MeasureTextCall): MeasureTextReply {
         val p = set(c.family, c.size, c.weight, c.italic, c.noKern)
         val r = MeasureTextReply()
@@ -90,6 +92,7 @@ object Text {
         return r
     }
 
+    @Synchronized
     fun advances(c: TextAdvancesCall): TextAdvancesReply {
         val p = set(c.family, c.size, c.weight, c.italic, c.noKern)
         val chars = c.text.toCharArray()
@@ -100,6 +103,7 @@ object Text {
         return r
     }
 
+    @Synchronized
     fun draw(c: DrawTextCall): DrawTextReply {
         val r = DrawTextReply()
         if (c.text.isBlank()) return r
@@ -158,6 +162,7 @@ object Text {
         return r
     }
 
+    @Synchronized
     fun register(c: RegisterFontCall): RegisterFontReply {
         val r = RegisterFontReply()
         try {

@@ -57,6 +57,19 @@ void mygo_android_call(uint8_t *msg, size_t len, uint8_t **reply, size_t *reply_
 	(*env)->DeleteLocalRef(env, r);
 }
 
+// mygo_android_call_here calls the host on the thread of the caller, which
+// joins the JVM the first time: the text of native UI, which measures and draws
+// with its own objects, whatever the UI thread is doing.
+void mygo_android_call_here(uint8_t *msg, size_t len, uint8_t **reply, size_t *reply_len) {
+	JNIEnv *env = NULL;
+	*reply = NULL;
+	*reply_len = 0;
+	if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK && (*vm)->AttachCurrentThreadAsDaemon(vm, &env, NULL) != JNI_OK) {
+		return;
+	}
+	mygo_android_call(msg, len, reply, reply_len);
+}
+
 void mygo_android_post(void) {
 	char c = 1;
 	write(wake[1], &c, 1);

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"os"
 	"slices"
 	"sync"
 	"time"
@@ -408,7 +409,7 @@ type engine struct {
 	bouncing   []uint64
 	bounceAt   time.Time
 	barsFadeAt time.Time
-	ime struct {
+	ime        struct {
 		state platform.TextInputState
 		base  int
 		// show counts the fingers that pressed the input with the focus,
@@ -470,7 +471,7 @@ type engine struct {
 	scrollDrag scrollDrag
 	// touch is the finger on a touch screen, flinging the content it
 	// flung as it lifted (touch.go).
-	touch    touchPan
+	touch touchPan
 	// touchText is the handles of the selection, for fingers; keyboardWas
 	// the keyboard's inset as the last frame laid out.
 	touchText   touchText
@@ -481,7 +482,7 @@ type engine struct {
 	backSent bool
 	// swipeRouter is the Router a gesture is taking back, or giving up on.
 	swipeRouter *Router
-	flinging fling
+	flinging    fling
 	// wheeling are the elements of the scroll containers that the notches
 	// of a mouse wheel scroll smoothly (glideWheels).
 	wheeling []uint64
@@ -539,6 +540,11 @@ type keyEvent struct {
 }
 
 func newRuntime(view func(*context), h host) *engine {
+	// A phone's host sets the environment after the package's variables
+	// took it.
+	if !frameStatsOn {
+		frameStatsThreshold, frameStatsOn = frameStatsSetting(os.Getenv("MYGO_FRAME_STATS"))
+	}
 	rt := &engine{view: view, host: h, text: textSystem(), states: map[uint64]*state{}, windowFocused: true}
 	rt.c.rt = rt
 	rt.owner = weak.Make(rt)

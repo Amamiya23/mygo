@@ -8,6 +8,7 @@ package mobile
 #include <stdlib.h>
 
 void mygo_android_call(uint8_t *msg, size_t len, uint8_t **reply, size_t *reply_len);
+void mygo_android_call_here(uint8_t *msg, size_t len, uint8_t **reply, size_t *reply_len);
 void mygo_android_post(void);
 void mygo_android_log(int error, uint8_t *line, size_t len);
 
@@ -18,6 +19,7 @@ import "C"
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"unsafe"
 )
@@ -29,6 +31,22 @@ func (cHost) call(msg []byte) []byte {
 	var reply *C.uint8_t
 	var n C.size_t
 	C.mygo_android_call((*C.uint8_t)(unsafe.Pointer(unsafe.SliceData(msg))), C.size_t(len(msg)), &reply, &n)
+	if reply == nil {
+		return nil
+	}
+	b := C.GoBytes(unsafe.Pointer(reply), C.int(n))
+	C.free(unsafe.Pointer(reply))
+	return b
+}
+
+// callHere calls the host on this thread, for what needs no UI thread.
+func (cHost) callHere(msg []byte) []byte {
+	// The thread stays the JVM's, as it joined it, while it calls.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	var reply *C.uint8_t
+	var n C.size_t
+	C.mygo_android_call_here((*C.uint8_t)(unsafe.Pointer(unsafe.SliceData(msg))), C.size_t(len(msg)), &reply, &n)
 	if reply == nil {
 		return nil
 	}

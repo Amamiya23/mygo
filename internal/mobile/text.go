@@ -3,12 +3,23 @@ package mobile
 import "github.com/egoist/mygo/internal/mobile/wire"
 
 // The text of native UI on Android, which the host's Paint measures and
-// draws (internal/text's engine): any goroutine but the UI thread.
+// draws (internal/text's engine): any goroutine but the UI thread. It goes
+// straight to the host on the caller's thread: a screen of new text is
+// hundreds of calls, which must not wait for the UI thread each.
 
 func textCall(m message, reply interface{ Decode(*wire.Reader) }) bool {
 	b := current.Load()
 	if b == nil || b.t == nil {
 		return false
+	}
+	if h, ok := b.t.h.(interface{ callHere(msg []byte) []byte }); ok {
+		var w wire.Writer
+		m.Encode(&w)
+		out := h.callHere(w.Buf)
+		if reply != nil {
+			reply.Decode(&wire.Reader{Buf: out})
+		}
+		return true
 	}
 	b.t.call(m, reply)
 	return true
