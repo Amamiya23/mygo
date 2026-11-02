@@ -8,7 +8,7 @@ import android.view.Choreographer
 import android.view.InputDevice
 import android.view.ActionMode
 import android.view.KeyEvent
-import android.view.Magnifier
+import android.widget.Magnifier
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
