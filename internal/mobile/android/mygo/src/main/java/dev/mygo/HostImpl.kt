@@ -14,11 +14,18 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.MutableContextWrapper
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
+import android.os.PowerManager
 import android.provider.OpenableColumns
 import android.provider.Settings
 import android.system.Os
@@ -31,6 +38,8 @@ import android.webkit.MimeTypeMap
 import android.widget.FrameLayout
 import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.WindowInsetsCompat
 import java.io.File
 import java.util.Calendar
@@ -369,6 +378,24 @@ object HostImpl : HostCalls {
     }
 
     fun activityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == SAVE_FILE) {
+            val req = saveReq
+            val uri = data?.data
+            if (resultCode != Activity.RESULT_OK || uri == null) {
+                Go.send(Event.filesResult(req, emptyList(), ""))
+                return
+            }
+            val from = savePath
+            Thread {
+                try {
+                    app.contentResolver.openOutputStream(uri)!!.use { out -> File(from).inputStream().use { it.copyTo(out) } }
+                    Go.send(Event.filesResult(req, listOf(uri.toString()), ""))
+                } catch (e: Exception) {
+                    Go.send(Event.filesResult(req, emptyList(), e.toString()))
+                }
+            }.start()
+            return
+        }
         if (requestCode == PICK_FILES) {
             val req = pickReq
             if (resultCode != Activity.RESULT_OK || data == null) {
@@ -507,12 +534,223 @@ object HostImpl : HostCalls {
         if (c.on) w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else w.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
+    // Network and power.
+
+    private val connectivity get() = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    private var watchingNetwork = false
+
+    private fun networkReply(): NetworkStatusReply {
+        val r = NetworkStatusReply()
+        val caps = connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+        r.online = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        r.metered = connectivity.isActiveNetworkMetered
+        return r
+    }
+
+    override fun networkStatus(): NetworkStatusReply = networkReply()
+
+    override fun watchNetwork() {
+        if (watchingNetwork) return
+        watchingNetwork = true
+        val send = {
+            val r = networkReply()
+            Go.send(Event.networkChanged(r.online, r.metered))
+        }
+        connectivity.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(n: Network) = send()
+            override fun onLost(n: Network) = send()
+            override fun onCapabilitiesChanged(n: Network, caps: NetworkCapabilities) = send()
+        })
+    }
+
+    override fun battery(): BatteryReply {
+        val r = BatteryReply()
+        val bm = app.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        r.level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) / 100.0
+        r.charging = bm.isCharging
+        r.lowPower = (app.getSystemService(Context.POWER_SERVICE) as PowerManager).isPowerSaveMode
+        return r
+    }
+
+    // The system's bars and the screen.
+
+    private var barStyle = "auto"
+    private var barsHidden = false
+    private var orientationAsked = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
+    override fun setSystemBars(c: SetSystemBarsCall) {
+        barStyle = c.style
+        barsHidden = c.hidden
+        applyBars()
+    }
+
+    /** Applies what the app asked of the system's bars, to the Activity showing it. */
+    fun applyBars() {
+        val a = activity ?: return
+        val ctl = WindowCompat.getInsetsController(a.window, a.window.decorView)
+        val darkMode = a.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        val darkIcons = when (barStyle) {
+            "dark" -> true
+            "light" -> false
+            else -> !darkMode
+        }
+        ctl.isAppearanceLightStatusBars = darkIcons
+        ctl.isAppearanceLightNavigationBars = darkIcons
+        ctl.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (barsHidden) ctl.hide(WindowInsetsCompat.Type.systemBars()) else ctl.show(WindowInsetsCompat.Type.systemBars())
+        a.requestedOrientation = orientationAsked
+    }
+
+    override fun setOrientations(c: SetOrientationsCall) {
+        val m = c.mask.toInt()
+        val portrait = m and 3 != 0
+        val landscape = m and 12 != 0
+        orientationAsked = when {
+            m == 0 -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            portrait && landscape -> ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+            m == 1 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            m == 2 -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+            m == 3 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            m == 4 -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            m == 8 -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+            landscape -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        activity?.requestedOrientation = orientationAsked
+    }
+
+    override fun share(c: ShareCall) {
+        val a = activity ?: run {
+            Go.send(Event.shareResult(c.req, "mygo: no window to share from"))
+            return
+        }
+        val text = listOf(c.text, c.url).filter { it.isNotEmpty() }.joinToString("\n")
+        val uris = ArrayList(c.paths.map { FileProvider.getUriForFile(app, app.packageName + ".mygo.files", File(it)) })
+        val send = when {
+            uris.size > 1 -> Intent(Intent.ACTION_SEND_MULTIPLE).setType("*/*").putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            uris.size == 1 -> {
+                val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(File(c.paths[0]).extension.lowercase()) ?: "application/octet-stream"
+                Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uris[0])
+            }
+            else -> Intent(Intent.ACTION_SEND).setType("text/plain")
+        }
+        if (uris.isNotEmpty()) {
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            send.clipData = ClipData.newRawUri(null, uris[0]).also { d -> uris.drop(1).forEach { d.addItem(ClipData.Item(it)) } }
+        }
+        if (text.isNotEmpty()) send.putExtra(Intent.EXTRA_TEXT, text)
+        try {
+            a.startActivity(Intent.createChooser(send, null))
+            Go.send(Event.shareResult(c.req, ""))
+        } catch (e: Exception) {
+            Go.send(Event.shareResult(c.req, e.toString()))
+        }
+    }
+
+    private const val SAVE_FILE = 0x6d7b
+    private var saveReq = 0L
+    private var savePath = ""
+
+    override fun saveFile(c: SaveFileCall) {
+        val a = activity ?: run {
+            Go.send(Event.filesResult(c.req, emptyList(), "mygo: no window to save from"))
+            return
+        }
+        saveReq = c.req
+        savePath = c.path
+        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(File(c.name).extension.lowercase()) ?: "application/octet-stream"
+        val i = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, c.name)
+        @Suppress("DEPRECATION")
+        a.startActivityForResult(i, SAVE_FILE)
+    }
+
+    override fun clipboardImage(): ClipboardImageReply {
+        val r = ClipboardImageReply()
+        val clip = clipboard.primaryClip ?: return r
+        if (clip.itemCount == 0) return r
+        val uri = clip.getItemAt(0).uri ?: return r
+        val mime = app.contentResolver.getType(uri) ?: return r
+        if (!mime.startsWith("image/")) return r
+        try {
+            val bmp = app.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return r
+            val out = java.io.ByteArrayOutputStream()
+            bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+            r.png = out.toByteArray()
+        } catch (_: Exception) {
+        }
+        return r
+    }
+
+    override fun setClipboardImage(c: SetClipboardImageCall) {
+        try {
+            val dir = File(app.cacheDir, "clipboard").apply { mkdirs() }
+            val f = File(dir, "image.png")
+            f.writeBytes(c.png)
+            val uri = FileProvider.getUriForFile(app, app.packageName + ".mygo.files", f)
+            clipboard.setPrimaryClip(ClipData.newUri(app.contentResolver, "image", uri))
+        } catch (_: Exception) {
+        }
+    }
+
+    /** A menu shown by the app, as a context menu, at a point of the window. */
+    override fun popupMenu(c: PopupMenuCall) {
+        val w = surface(c.id)
+        val a = activity
+        val host = w?.view ?: front()?.view
+        if (a == null || host == null) {
+            Go.send(Event.menuPicked(c.req, 0))
+            return
+        }
+        // Where it shows: a view at the point, gone as the menu goes.
+        val anchor = View(a)
+        val d = density
+        val lp = FrameLayout.LayoutParams(1, 1)
+        lp.leftMargin = (c.x * d).toInt()
+        lp.topMargin = (c.y * d).toInt()
+        root.addView(anchor, lp)
+        val menu = android.widget.PopupMenu(a, anchor)
+        val r = WireReader(c.items)
+        var group = 0
+        var order = 0
+        while (!r.done()) {
+            val id = r.int()
+            val label = r.string()
+            val enabled = r.bool()
+            val checked = r.bool()
+            if (id == 0L) {
+                group++
+                continue
+            }
+            val item = menu.menu.add(group, id.toInt(), order++, label)
+            item.isEnabled = enabled
+            if (checked) {
+                item.isCheckable = true
+                item.isChecked = true
+            }
+        }
+        var picked = 0L
+        menu.setOnMenuItemClickListener {
+            picked = it.itemId.toLong()
+            true
+        }
+        menu.setOnDismissListener {
+            root.removeView(anchor)
+            Go.send(Event.menuPicked(c.req, picked))
+        }
+        root.post { menu.show() }
+    }
+
+    override fun setBarItems(c: SetBarItemsCall) {
+        windows[c.id]?.let { Navigation.setBarItems(it, c) }
+    }
+
     override fun haptic(c: HapticCall) {
         val v: View = front()?.view ?: root
         val k = when (c.kind) {
             "selection" -> HapticFeedbackConstants.CLOCK_TICK
             "light" -> HapticFeedbackConstants.KEYBOARD_TAP
             "heavy" -> HapticFeedbackConstants.LONG_PRESS
+            "medium" -> HapticFeedbackConstants.CONTEXT_CLICK
             "success" -> if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY
             "warning", "error" -> if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS
             else -> HapticFeedbackConstants.VIRTUAL_KEY

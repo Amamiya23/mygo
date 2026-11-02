@@ -116,7 +116,7 @@ func (t *iosToolchain) buildApp(ctx context.Context, c, dc *Config, tk *task, op
 	args = append(args, swift...)
 	args = append(args, lib, "-o", filepath.Join(bundle, exe), "-Xlinker", "-dead_strip", "-lresolv")
 	for _, f := range []string{"UIKit", "WebKit", "Metal", "QuartzCore", "CoreText", "CoreGraphics", "Security", "CoreFoundation",
-		"UserNotifications", "UniformTypeIdentifiers"} {
+		"UserNotifications", "UniformTypeIdentifiers", "Network"} {
 		args = append(args, "-framework", f)
 	}
 	if out, err := exec.CommandContext(ctx, "xcrun", args...).CombinedOutput(); err != nil {

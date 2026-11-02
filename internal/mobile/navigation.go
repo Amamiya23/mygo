@@ -72,6 +72,14 @@ func (b *Backend) handleNavigation(op uint64, r *wire.Reader) bool {
 		if t := b.tabs[e.ID]; t != nil {
 			t.h.TabSelected(e.Index)
 		}
+	case wire.EventBarItemClicked:
+		var e wire.BarItemClickedEvent
+		e.Decode(r)
+		if w := b.windows[e.ID]; w != nil && e.Index >= 0 && e.Index < len(w.barItems) {
+			if fn := w.barItems[e.Index].OnClick; fn != nil {
+				fn()
+			}
+		}
 	case wire.EventPopped:
 		var e wire.PoppedEvent
 		e.Decode(r)

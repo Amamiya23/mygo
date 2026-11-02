@@ -313,11 +313,67 @@ func (b *Backend) NewWindow(opts *platform.WindowOptions, h platform.WindowHandl
 	return b.newWindow(opts, h)
 }
 
-func (b *Backend) PopupMenu(m *platform.Menu, w platform.Window, pos *platform.Point) {
-	// Phones have no menus of the app's: a page's or a view's own menus
-	// show where they ask for them (Window.showMenu).
+// PopupMenu shows the system's menu at pos in w, and waits for the user's
+// choice, handling events meanwhile, as menus do on desktops. What it
+// chooses reaches the item's handlers through MenuItemClicked.
+func (b *Backend) PopupMenu(m *platform.Menu, pw platform.Window, pos *platform.Point) {
+	w, _ := pw.(*window)
+	if w == nil {
+		w = b.front()
+	}
+	if w == nil || m == nil {
+		return
+	}
+	var enc wire.Writer
+	encodeMenu(&enc, m, "")
+	var x, y float64
+	if pos != nil {
+		x, y = float64(pos.X), float64(pos.Y)
+	}
+	picked, done := 0, false
+	req := b.request(func(r wire.Reader) {
+		var e wire.MenuPickedEvent
+		e.Decode(&r)
+		picked, done = e.Item, true
+		b.Wake()
+	})
+	b.call(&wire.PopupMenu{ID: w.id, Req: req, X: x, Y: y, Items: enc.Buf}, nil)
+	for !done && !b.quit.Load() {
+		b.Step()
+	}
+	if picked != 0 {
+		b.h.MenuItemClicked(picked)
+	}
 }
 
+// encodeMenu writes the items a phone's menu shows, in order, as the hosts
+// read them: ID (0 for a separator), label, enabled, checked, destructive
+// role. Phones' menus have one level: a submenu's items follow, under their
+// labels.
+func encodeMenu(w *wire.Writer, m *platform.Menu, prefix string) {
+	for _, it := range m.Items {
+		if !it.Visible {
+			continue
+		}
+		if it.Submenu != nil {
+			encodeMenu(w, it.Submenu, prefix+it.Label+" › ")
+			continue
+		}
+		if it.Type == platform.MenuItemSeparator {
+			w.Int(0)
+			w.String("")
+			w.Bool(false)
+			w.Bool(false)
+			continue
+		}
+		w.Int(it.ID)
+		w.String(prefix + it.Label)
+		w.Bool(it.Enabled)
+		w.Bool(it.Checked)
+	}
+}
+
+func (b *Backend) Network() platform.Network             { return network{b: b} }
 func (b *Backend) App() platform.AppController           { return appController{b: b} }
 func (b *Backend) Dialogs() platform.Dialogs             { return dialogs{b: b} }
 func (b *Backend) Clipboard() platform.Clipboard         { return clipboard{b: b} }

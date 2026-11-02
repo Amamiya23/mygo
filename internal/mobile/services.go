@@ -2,6 +2,8 @@ package mobile
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/egoist/mygo/internal/mobile/wire"
@@ -81,9 +83,36 @@ func (d dialogs) ShowOpenDialog(_ platform.Window, o *platform.OpenDialogOptions
 	d.b.call(&wire.OpenFiles{Req: req, Multiple: o.Multiple, Directories: o.OpenDirectories && !o.OpenFiles, Extensions: exts}, nil)
 }
 
+// ShowSaveDialog answers with a temporary file for the app to write, as phones
+// have no paths of other apps' folders; DialogModule.SaveData has the user
+// choose where a copy of it goes.
+func (d dialogs) ShowSaveDialog(_ platform.Window, o *platform.SaveDialogOptions, cb func(string, error)) {
+	name := filepath.Base(o.DefaultPath)
+	if name == "." || name == "/" || name == "" {
+		name = "Untitled"
+	}
+	dir, err := os.MkdirTemp(d.b.appInfo().TempDir, "save")
+	if err != nil {
+		cb("", err)
+		return
+	}
+	cb(filepath.Join(dir, name), nil)
+}
+
 type clipboard struct {
 	unsupported.Clipboard
 	b *Backend
+}
+
+func (c clipboard) ReadImage() []byte {
+	var r wire.ClipboardImageReply
+	c.b.call(&wire.ClipboardImage{}, &r)
+	return r.PNG
+}
+
+func (c clipboard) WriteImage(png []byte) error {
+	c.b.call(&wire.SetClipboardImage{PNG: png}, nil)
+	return nil
 }
 
 func (c clipboard) ReadText() string {
@@ -97,10 +126,14 @@ func (c clipboard) WriteText(s string) { c.b.call(&wire.SetClipboardText{Text: s
 func (c clipboard) Clear() { c.WriteText("") }
 
 func (c clipboard) AvailableFormats() []string {
+	var out []string
 	if _, ok := c.text(); ok {
-		return []string{"text/plain"}
+		out = append(out, "text/plain")
 	}
-	return nil
+	if len(c.ReadImage()) > 0 {
+		out = append(out, "image/png")
+	}
+	return out
 }
 
 func (c clipboard) text() (string, bool) {
@@ -110,30 +143,51 @@ func (c clipboard) text() (string, bool) {
 }
 
 func (c clipboard) Formats() []transfer.Format {
+	var out []transfer.Format
 	if _, ok := c.text(); ok {
-		return []transfer.Format{transfer.Text}
+		out = append(out, transfer.Text)
 	}
-	return nil
+	if len(c.ReadImage()) > 0 {
+		out = append(out, transfer.PNG)
+	}
+	return out
 }
 
 func (c clipboard) ReadData(formats []transfer.Format) (transfer.Data, error) {
-	var d transfer.Data
+	var reps []transfer.Representation
 	for _, f := range formats {
-		if f == transfer.Text {
+		switch f {
+		case transfer.Text:
 			if s, ok := c.text(); ok {
-				d = transfer.TextData(s)
+				reps = append(reps, transfer.Bytes(transfer.Text, []byte(s)))
+			}
+		case transfer.PNG:
+			if png := c.ReadImage(); len(png) > 0 {
+				reps = append(reps, transfer.Bytes(transfer.PNG, png))
 			}
 		}
 	}
-	return d, nil
+	if len(reps) == 0 {
+		return transfer.Data{}, nil
+	}
+	return transfer.New(transfer.NewItem(reps...)), nil
 }
 
 func (c clipboard) WriteData(d transfer.Data, _ func()) error {
-	b, err := d.Read(transfer.Text)
-	if err != nil {
+	wrote := false
+	if b, err := d.Read(transfer.PNG); err == nil {
+		c.WriteImage(b)
+		wrote = true
+	}
+	// The system's clipboard holds one or the other through these calls:
+	// text, what's pasted most, wins.
+	if b, err := d.Read(transfer.Text); err == nil {
+		c.WriteText(string(b))
+		wrote = true
+	}
+	if !wrote {
 		return errUnsupported
 	}
-	c.WriteText(string(b))
 	return nil
 }
 
@@ -207,6 +261,25 @@ type power struct {
 func (p power) KeepAwake(_ bool, _ string) func() {
 	p.b.call(&wire.KeepAwake{On: true}, nil)
 	return func() { p.b.call(&wire.KeepAwake{On: false}, nil) }
+}
+
+func (p power) OnBattery() bool {
+	var r wire.BatteryReply
+	p.b.call(&wire.Battery{}, &r)
+	return !r.Charging
+}
+
+type network struct {
+	unsupported.Network
+	b *Backend
+}
+
+func (n network) Watch() { n.b.call(&wire.WatchNetwork{}, nil) }
+
+func (n network) Status() platform.NetworkStatus {
+	var r wire.NetworkStatusReply
+	n.b.call(&wire.NetworkStatus{}, &r)
+	return platform.NetworkStatus{Online: r.Online, Metered: r.Metered}
 }
 
 type secrets struct {

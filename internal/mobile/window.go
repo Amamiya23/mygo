@@ -61,6 +61,7 @@ type window struct {
 	width, height, scale float64
 	insets               platform.Insets
 	keyboard             float64
+	barItems             []platform.BarItem
 }
 
 // scriptsOf encodes user scripts as CreateWindow and SetUserScripts take
@@ -147,7 +148,13 @@ func (w *window) Surface() platform.Surface {
 	return w.s
 }
 
-func (w *window) SetTitle(t string)                          { w.title = t }
+func (w *window) SetTitle(t string) {
+	if t != w.title {
+		w.title = t
+		w.b.call(&wire.SetTitle{ID: w.id, Title: t}, nil)
+	}
+}
+
 func (w *window) Title() string                              { return w.title }
 func (w *window) SetRepresentedFile(string)                  {}
 func (w *window) SetDocumentEdited(bool)                     {}

@@ -1270,6 +1270,62 @@ type NotificationSender struct {
 	Avatar   []byte
 }
 
+// DeviceBackend is a Backend of a device held in the hand: phones and
+// tablets. Backends of desktops have none, and the core's modules do
+// nothing or report that they cannot.
+type DeviceBackend interface {
+	// Haptic plays a haptic: "selection", "light", "medium", "heavy",
+	// "success", "warning" or "error".
+	Haptic(kind string)
+	// SetSystemBars sets the color of the icons of the system's bars,
+	// "auto", "light" or "dark", and whether the bars hide.
+	SetSystemBars(style string, hidden bool)
+	// SetOrientations limits the orientations the screen may take: a mask
+	// of Orientation values, 0 for any.
+	SetOrientations(mask uint32)
+	// Share shows the system's share sheet; done is called once it is
+	// shown, or with why it could not be.
+	Share(s ShareRequest, done func(error))
+	// SaveFile has the user choose where to keep a copy of the file at path.
+	SaveFile(path, name string, done func(saved string, err error))
+	// Battery tells the state of the battery.
+	Battery() BatteryStatus
+	// SetBarItems sets the buttons at the end of w's navigation bar.
+	SetBarItems(w Window, items []BarItem)
+}
+
+// Orientations of the screen, for DeviceBackend.SetOrientations.
+const (
+	OrientationPortrait uint32 = 1 << iota
+	OrientationPortraitUpsideDown
+	OrientationLandscapeLeft
+	OrientationLandscapeRight
+)
+
+// ShareRequest is what a share sheet shares. X and Y are where in the window
+// in front it comes from, which an iPad's sheet points at.
+type ShareRequest struct {
+	Text, URL string
+	Paths     []string
+	X, Y      float64
+}
+
+// BatteryStatus is the state of a device's battery. Level is from 0 to 1,
+// negative where it is not known.
+type BatteryStatus struct {
+	Level    float64
+	Charging bool
+	LowPower bool
+}
+
+// BarItem is a button of a window's navigation bar.
+type BarItem struct {
+	Title, Symbol string
+	// Icon is a PNG drawn as a template (Tab.Icon).
+	Icon    []byte
+	OnClick func()
+}
+
 // NavigationBackend is a Backend with the navigation of phones: a bar of
 // tabs, each showing a window, and stacks of windows pushed over others,
 // both the system's own (UIKit's tab bar and navigation controllers,

@@ -204,7 +204,12 @@ func (b *Backend) handle(msg []byte) []byte {
 			delete(b.schemes, e.Req)
 			s.cancel()
 		}
-	case wire.EventAsyncResult, wire.EventCaptured, wire.EventMessageBoxResult, wire.EventFilesResult, wire.EventNotifyDone:
+	case wire.EventNetworkChanged:
+		var e wire.NetworkChangedEvent
+		e.Decode(&r)
+		b.h.NetworkChanged(platform.NetworkStatus{Online: e.Online, Metered: e.Metered})
+	case wire.EventAsyncResult, wire.EventCaptured, wire.EventMessageBoxResult, wire.EventFilesResult, wire.EventNotifyDone,
+		wire.EventShareResult, wire.EventMenuPicked:
 		// Answers to a request: its number first, then the rest.
 		rest := r
 		req := r.Int()

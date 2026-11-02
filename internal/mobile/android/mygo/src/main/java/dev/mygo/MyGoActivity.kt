@@ -18,8 +18,8 @@ class MyGoActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         lastConfig = Configuration(resources.configuration)
-        tintBars()
         HostImpl.attach(this)
+        HostImpl.applyBars()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 // Back the app does not take leaves it running, as the
@@ -72,19 +72,10 @@ class MyGoActivity : ComponentActivity() {
         if (old == null) return
         val diff = old.diff(c)
         if (diff and (ActivityInfoChanges.UI_MODE or ActivityInfoChanges.FONT_SCALE) != 0) {
-            tintBars()
+            HostImpl.applyBars()
             Go.send(Event.themeChanged())
         }
         if (diff and ActivityInfoChanges.LOCALE != 0) Go.send(Event.localeChanged())
-    }
-
-    /** Dark icons on the system's bars in light mode, light ones in dark mode. */
-    private fun tintBars() {
-        val dark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = !dark
-            isAppearanceLightNavigationBars = !dark
-        }
     }
 
     override fun onLowMemory() {

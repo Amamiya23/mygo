@@ -273,6 +273,24 @@ object Navigation {
         s.tabs?.bar?.setBackgroundColor(w.fill)
     }
 
+    /** Buttons at the end of the window's toolbar. */
+    fun setBarItems(w: HostWindow, c: SetBarItemsCall) {
+        val t = stacks[w.id]?.pages?.firstOrNull { it.window === w }?.toolbar ?: return
+        t.menu.clear()
+        c.titles.forEachIndexed { i, title ->
+            val item = t.menu.add(0, i, i, title)
+            val icon = android.util.Base64.decode(c.icons[i], android.util.Base64.DEFAULT)
+            if (icon.isNotEmpty()) {
+                BitmapFactory.decodeByteArray(icon, 0, icon.size)?.let { item.icon = BitmapDrawable(w.context.resources, it) }
+            }
+            item.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_IF_ROOM)
+        }
+        t.setOnMenuItemClickListener {
+            Go.send(Event.barItemClicked(c.id, it.itemId.toLong()))
+            true
+        }
+    }
+
     fun setTitle(w: HostWindow, title: String) {
         stacks[w.id]?.pages?.firstOrNull { it.window === w }?.toolbar?.title = title
     }

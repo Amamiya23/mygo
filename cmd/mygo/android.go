@@ -170,7 +170,7 @@ func (t *androidToolchain) project(dir string) error {
 // manifest is the app's AndroidManifest.xml: its permissions and URL
 // schemes over the host's.
 func androidManifest(c *Config) []byte {
-	perms := []string{"android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS"}
+	perms := []string{"android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE", "android.permission.POST_NOTIFICATIONS"}
 	for _, p := range c.Android.Permissions {
 		if !strings.Contains(p, ".") {
 			p = "android.permission." + p

@@ -54,18 +54,29 @@ const (
 	CallRemoveNotification     = 48
 	CallRemoveAllNotifications = 49
 	CallKeepAwake              = 50
-	CallHaptic                 = 51
-	CallRequestFrame           = 52
-	CallSetTextInput           = 53
-	CallSetCursor              = 54
-	CallAccessibilityChanged   = 55
-	CallAnnounce               = 56
-	CallShowMenu               = 57
-	CallTextMetrics            = 58
-	CallMeasureText            = 59
-	CallTextAdvances           = 60
-	CallDrawText               = 61
-	CallRegisterFont           = 62
+	CallNetworkStatus          = 51
+	CallWatchNetwork           = 52
+	CallBattery                = 53
+	CallSetSystemBars          = 54
+	CallSetOrientations        = 55
+	CallShare                  = 56
+	CallSaveFile               = 57
+	CallClipboardImage         = 58
+	CallSetClipboardImage      = 59
+	CallPopupMenu              = 60
+	CallSetBarItems            = 61
+	CallHaptic                 = 62
+	CallRequestFrame           = 63
+	CallSetTextInput           = 64
+	CallSetCursor              = 65
+	CallAccessibilityChanged   = 66
+	CallAnnounce               = 67
+	CallShowMenu               = 68
+	CallTextMetrics            = 69
+	CallMeasureText            = 70
+	CallTextAdvances           = 71
+	CallDrawText               = 72
+	CallRegisterFont           = 73
 )
 
 // Numbers of events.
@@ -79,48 +90,52 @@ const (
 	EventMemoryWarning       = 7
 	EventTerminating         = 8
 	EventResized             = 9
-	EventTabSelected         = 10
-	EventPopped              = 11
-	EventBackPressed         = 12
-	EventMessage             = 13
-	EventWillNavigate        = 14
-	EventNewWindow           = 15
-	EventPageState           = 16
-	EventNavigationStarted   = 17
-	EventNavigationCommitted = 18
-	EventLoadFinished        = 19
-	EventLoadFailed          = 20
-	EventClosedByPage        = 21
-	EventProcessGone         = 22
-	EventPermissionRequested = 23
-	EventSchemeRequest       = 24
-	EventSchemeCancel        = 25
-	EventAsyncResult         = 26
-	EventCaptured            = 27
-	EventMessageBoxResult    = 28
-	EventFilesResult         = 29
-	EventNotifyDone          = 30
-	EventNotificationClicked = 31
-	EventFrame               = 32
-	EventSurfaceChanged      = 33
-	EventSurfaceDestroyed    = 34
-	EventTouch               = 35
-	EventScroll              = 36
-	EventKey                 = 37
-	EventTextReplace         = 38
-	EventTextMark            = 39
-	EventTextUnmark          = 40
-	EventTextDelete          = 41
-	EventTextSelect          = 42
-	EventTextCommand         = 43
-	EventTextState           = 44
-	EventTextRange           = 45
-	EventTextBounds          = 46
-	EventTextIndexAt         = 47
-	EventTextInputEnded      = 48
-	EventMenuChosen          = 49
-	EventAccessibilityTree   = 50
-	EventAccessibilityAction = 51
+	EventNetworkChanged      = 10
+	EventShareResult         = 11
+	EventMenuPicked          = 12
+	EventBarItemClicked      = 13
+	EventTabSelected         = 14
+	EventPopped              = 15
+	EventBackPressed         = 16
+	EventMessage             = 17
+	EventWillNavigate        = 18
+	EventNewWindow           = 19
+	EventPageState           = 20
+	EventNavigationStarted   = 21
+	EventNavigationCommitted = 22
+	EventLoadFinished        = 23
+	EventLoadFailed          = 24
+	EventClosedByPage        = 25
+	EventProcessGone         = 26
+	EventPermissionRequested = 27
+	EventSchemeRequest       = 28
+	EventSchemeCancel        = 29
+	EventAsyncResult         = 30
+	EventCaptured            = 31
+	EventMessageBoxResult    = 32
+	EventFilesResult         = 33
+	EventNotifyDone          = 34
+	EventNotificationClicked = 35
+	EventFrame               = 36
+	EventSurfaceChanged      = 37
+	EventSurfaceDestroyed    = 38
+	EventTouch               = 39
+	EventScroll              = 40
+	EventKey                 = 41
+	EventTextReplace         = 42
+	EventTextMark            = 43
+	EventTextUnmark          = 44
+	EventTextDelete          = 45
+	EventTextSelect          = 46
+	EventTextCommand         = 47
+	EventTextState           = 48
+	EventTextRange           = 49
+	EventTextBounds          = 50
+	EventTextIndexAt         = 51
+	EventTextInputEnded      = 52
+	EventMenuChosen          = 53
+	EventAccessibilityTree   = 54
+	EventAccessibilityAction = 55
 )
 
 // AppInfo is the app's bundle and the system's settings, asked once at start.
@@ -985,6 +1000,197 @@ func (m *KeepAwake) Encode(w *Writer) {
 // Wait reports whether the caller waits for the host to run it.
 func (*KeepAwake) Wait() bool { return false }
 
+type NetworkStatus struct {
+}
+
+func (m *NetworkStatus) Encode(w *Writer) {
+	w.Uvarint(CallNetworkStatus)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*NetworkStatus) Wait() bool { return true }
+
+type NetworkStatusReply struct {
+	Online  bool
+	Metered bool
+}
+
+func (m *NetworkStatusReply) Decode(r *Reader) {
+	m.Online = r.Bool()
+	m.Metered = r.Bool()
+}
+
+// WatchNetwork is starts NetworkChanged.
+type WatchNetwork struct {
+}
+
+func (m *WatchNetwork) Encode(w *Writer) {
+	w.Uvarint(CallWatchNetwork)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*WatchNetwork) Wait() bool { return false }
+
+type Battery struct {
+}
+
+func (m *Battery) Encode(w *Writer) {
+	w.Uvarint(CallBattery)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*Battery) Wait() bool { return true }
+
+type BatteryReply struct {
+	Level    float64
+	Charging bool
+	LowPower bool
+}
+
+func (m *BatteryReply) Decode(r *Reader) {
+	m.Level = r.Float()
+	m.Charging = r.Bool()
+	m.LowPower = r.Bool()
+}
+
+// SetSystemBars is the icons of the system's bars ("auto", "light" or "dark"), and whether the bars hide.
+type SetSystemBars struct {
+	Style  string
+	Hidden bool
+}
+
+func (m *SetSystemBars) Encode(w *Writer) {
+	w.Uvarint(CallSetSystemBars)
+	w.String(m.Style)
+	w.Bool(m.Hidden)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*SetSystemBars) Wait() bool { return false }
+
+// SetOrientations is the orientations the screen may take: 1 portrait, 2 upside down, 4 landscape left, 8 landscape right; 0 any.
+type SetOrientations struct {
+	Mask int
+}
+
+func (m *SetOrientations) Encode(w *Writer) {
+	w.Uvarint(CallSetOrientations)
+	w.Int(m.Mask)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*SetOrientations) Wait() bool { return false }
+
+// Share is the share sheet of text, a link and files; ShareResult answers.
+type Share struct {
+	Req   int
+	Text  string
+	URL   string
+	Paths []string
+	X     float64
+	Y     float64
+}
+
+func (m *Share) Encode(w *Writer) {
+	w.Uvarint(CallShare)
+	w.Int(m.Req)
+	w.String(m.Text)
+	w.String(m.URL)
+	w.Strings(m.Paths)
+	w.Float(m.X)
+	w.Float(m.Y)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*Share) Wait() bool { return false }
+
+// SaveFile is the system's picker of where to keep a copy of Path under Name; FilesResult answers with the place, empty when dismissed.
+type SaveFile struct {
+	Req  int
+	Path string
+	Name string
+}
+
+func (m *SaveFile) Encode(w *Writer) {
+	w.Uvarint(CallSaveFile)
+	w.Int(m.Req)
+	w.String(m.Path)
+	w.String(m.Name)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*SaveFile) Wait() bool { return false }
+
+type ClipboardImage struct {
+}
+
+func (m *ClipboardImage) Encode(w *Writer) {
+	w.Uvarint(CallClipboardImage)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*ClipboardImage) Wait() bool { return true }
+
+type ClipboardImageReply struct {
+	PNG []byte
+}
+
+func (m *ClipboardImageReply) Decode(r *Reader) {
+	m.PNG = r.Bytes()
+}
+
+type SetClipboardImage struct {
+	PNG []byte
+}
+
+func (m *SetClipboardImage) Encode(w *Writer) {
+	w.Uvarint(CallSetClipboardImage)
+	w.Bytes(m.PNG)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*SetClipboardImage) Wait() bool { return false }
+
+// PopupMenu is the system's menu at a point of the window: Items are encoded by Go (encodeMenu); MenuPicked answers with the item's ID, 0 when dismissed.
+type PopupMenu struct {
+	ID    int
+	Req   int
+	X     float64
+	Y     float64
+	Items []byte
+}
+
+func (m *PopupMenu) Encode(w *Writer) {
+	w.Uvarint(CallPopupMenu)
+	w.Int(m.ID)
+	w.Int(m.Req)
+	w.Float(m.X)
+	w.Float(m.Y)
+	w.Bytes(m.Items)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*PopupMenu) Wait() bool { return false }
+
+// SetBarItems is the buttons at the end of the window's navigation bar; BarItemClicked tells which: titles, symbols and icons by index.
+type SetBarItems struct {
+	ID      int
+	Titles  []string
+	Symbols []string
+	Icons   []string
+}
+
+func (m *SetBarItems) Encode(w *Writer) {
+	w.Uvarint(CallSetBarItems)
+	w.Int(m.ID)
+	w.Strings(m.Titles)
+	w.Strings(m.Symbols)
+	w.Strings(m.Icons)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*SetBarItems) Wait() bool { return false }
+
 // Haptic is "selection", "light", "medium", "heavy", "success", "warning" or "error".
 type Haptic struct {
 	Kind string
@@ -1384,6 +1590,46 @@ func (m *ResizedEvent) Decode(r *Reader) {
 	m.SafeBottom = r.Float()
 	m.SafeRight = r.Float()
 	m.Keyboard = r.Float()
+}
+
+type NetworkChangedEvent struct {
+	Online  bool
+	Metered bool
+}
+
+func (m *NetworkChangedEvent) Decode(r *Reader) {
+	m.Online = r.Bool()
+	m.Metered = r.Bool()
+}
+
+type ShareResultEvent struct {
+	Req   int
+	Error string
+}
+
+func (m *ShareResultEvent) Decode(r *Reader) {
+	m.Req = r.Int()
+	m.Error = r.String()
+}
+
+type MenuPickedEvent struct {
+	Req  int
+	Item int
+}
+
+func (m *MenuPickedEvent) Decode(r *Reader) {
+	m.Req = r.Int()
+	m.Item = r.Int()
+}
+
+type BarItemClickedEvent struct {
+	ID    int
+	Index int
+}
+
+func (m *BarItemClickedEvent) Decode(r *Reader) {
+	m.ID = r.Int()
+	m.Index = r.Int()
 }
 
 // TabSelectedEvent is the user chose tab Index.

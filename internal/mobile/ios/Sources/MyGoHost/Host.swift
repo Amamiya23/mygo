@@ -5,6 +5,7 @@ import WebKit
 import UserNotifications
 import UniformTypeIdentifiers
 import Security
+import Network
 
 final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocumentPickerDelegate {
     static let shared = Host()
@@ -344,6 +345,172 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
     }
 
     func keepAwake(_ c: KeepAwakeCall) { UIApplication.shared.isIdleTimerDisabled = c.on }
+
+    // Network and power.
+
+    private var pathMonitor: NWPathMonitor?
+    private var path: NWPath?
+    private let pathQueue = DispatchQueue(label: "mygo.network")
+
+    private func monitor() -> NWPathMonitor {
+        if let m = pathMonitor { return m }
+        let m = NWPathMonitor()
+        pathMonitor = m
+        let ready = DispatchSemaphore(value: 0)
+        var first = true
+        m.pathUpdateHandler = { [weak self] p in
+            DispatchQueue.main.async { self?.path = p }
+            if first {
+                first = false
+                self?.path = p
+                ready.signal()
+            } else if self?.watchingNetwork == true {
+                Go.send(Event.networkChanged(online: p.status == .satisfied, metered: p.isExpensive || p.isConstrained))
+            }
+        }
+        m.start(queue: pathQueue)
+        // Its first answer comes within milliseconds.
+        _ = ready.wait(timeout: .now() + 0.5)
+        return m
+    }
+
+    private var watchingNetwork = false
+
+    func networkStatus() -> NetworkStatusReply {
+        _ = monitor()
+        var r = NetworkStatusReply()
+        if let p = path {
+            r.online = p.status == .satisfied
+            r.metered = p.isExpensive || p.isConstrained
+        }
+        return r
+    }
+
+    func watchNetwork() {
+        watchingNetwork = true
+        _ = monitor()
+    }
+
+    func battery() -> BatteryReply {
+        let d = UIDevice.current
+        d.isBatteryMonitoringEnabled = true
+        var r = BatteryReply()
+        r.level = Double(d.batteryLevel)
+        r.charging = d.batteryState == .charging || d.batteryState == .full
+        r.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        return r
+    }
+
+    // The system's bars and the screen.
+
+    func setSystemBars(_ c: SetSystemBarsCall) {
+        root.barStyle = c.style
+        root.barsHidden = c.hidden
+        root.setNeedsStatusBarAppearanceUpdate()
+        root.setNeedsUpdateOfHomeIndicatorAutoHidden()
+    }
+
+    func setOrientations(_ c: SetOrientationsCall) {
+        var m: UIInterfaceOrientationMask = []
+        if c.mask & 1 != 0 { m.insert(.portrait) }
+        if c.mask & 2 != 0 { m.insert(.portraitUpsideDown) }
+        if c.mask & 4 != 0 { m.insert(.landscapeLeft) }
+        if c.mask & 8 != 0 { m.insert(.landscapeRight) }
+        root.orientations = m.isEmpty ? .all : m
+        root.setNeedsUpdateOfSupportedInterfaceOrientations()
+        window?.windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: root.orientations))
+    }
+
+    func share(_ c: ShareCall) {
+        var items: [Any] = []
+        if !c.text.isEmpty { items.append(c.text) }
+        if let u = URL(string: c.url), !c.url.isEmpty { items.append(u) }
+        items += c.paths.map { URL(fileURLWithPath: $0) }
+        guard !items.isEmpty else {
+            Go.send(Event.shareResult(req: c.req, error: "mygo: nothing to share"))
+            return
+        }
+        let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        popover(vc, x: c.x, y: c.y)
+        presenter.present(vc, animated: true) { Go.send(Event.shareResult(req: c.req, error: "")) }
+    }
+
+    /// Where a sheet points on an iPad, which shows it as a popover.
+    private func popover(_ vc: UIViewController, x: Double, y: Double) {
+        guard let p = vc.popoverPresentationController else { return }
+        p.sourceView = root.view
+        let at = x == 0 && y == 0 ? CGPoint(x: root.view.bounds.midX, y: root.view.bounds.midY) : CGPoint(x: x, y: y)
+        p.sourceRect = CGRect(origin: at, size: .zero)
+    }
+
+    func saveFile(_ c: SaveFileCall) {
+        // Exporting the copy under the name asked for.
+        let dir = NSTemporaryDirectory() + UUID().uuidString
+        let named = URL(fileURLWithPath: dir).appendingPathComponent(c.name)
+        do {
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: c.path), to: named)
+        } catch {
+            Go.send(Event.filesResult(req: c.req, paths: [], error: error.localizedDescription))
+            return
+        }
+        let p = UIDocumentPickerViewController(forExporting: [named], asCopy: true)
+        p.delegate = self
+        pickers[p] = c.req
+        presenter.present(p, animated: true)
+    }
+
+    func clipboardImage() -> ClipboardImageReply {
+        var r = ClipboardImageReply()
+        if UIPasteboard.general.hasImages, let png = UIPasteboard.general.image?.pngData() { r.png = Array(png) }
+        return r
+    }
+
+    func setClipboardImage(_ c: SetClipboardImageCall) {
+        UIPasteboard.general.image = UIImage(data: Data(c.png))
+    }
+
+    /// A menu shown by the app, as a context menu: an action sheet, from the
+    /// point on an iPad.
+    func popupMenu(_ c: PopupMenuCall) {
+        let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        c.items.withUnsafeBytes { buf in
+            var r = WireReader(buf)
+            while r.at < buf.count {
+                let id = r.int(), label = r.string(), enabled = r.bool(), checked = r.bool()
+                if id == 0 { continue }
+                let a = UIAlertAction(title: label, style: .default) { _ in
+                    Go.send(Event.menuPicked(req: c.req, item: id))
+                }
+                a.isEnabled = enabled
+                if checked { a.setValue(true, forKey: "checked") }
+                sheet.addAction(a)
+            }
+        }
+        sheet.addAction(UIAlertAction(title: NSLocalizedString("Cancel", comment: ""), style: .cancel) { _ in
+            Go.send(Event.menuPicked(req: c.req, item: 0))
+        })
+        popover(sheet, x: c.x, y: c.y)
+        presenter.present(sheet, animated: true)
+    }
+
+    func setBarItems(_ c: SetBarItemsCall) {
+        guard let w = windows[c.id] else { return }
+        var items: [UIBarButtonItem] = []
+        for (i, title) in c.titles.enumerated() {
+            let id = c.id
+            let action = UIAction(title: title) { _ in Go.send(Event.barItemClicked(id: id, index: i)) }
+            var image = c.symbols[i].isEmpty ? nil : UIImage(systemName: c.symbols[i])
+            if image == nil, let d = Data(base64Encoded: c.icons[i]), !d.isEmpty {
+                image = UIImage(data: d, scale: 3)?.withRenderingMode(.alwaysTemplate)
+            }
+            let item = UIBarButtonItem(primaryAction: action)
+            item.image = image
+            item.accessibilityLabel = title
+            items.append(item)
+        }
+        Navigation.shared.controller(w).navigationItem.rightBarButtonItems = items.reversed()
+    }
 
     func haptic(_ c: HapticCall) {
         switch c.kind {

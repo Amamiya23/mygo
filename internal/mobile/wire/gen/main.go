@@ -332,6 +332,9 @@ class WireWriter {
 class WireReader(private val buf: ByteArray) {
     private var at = 0
 
+    /** Whether all of the message was read. */
+    fun done() = at >= buf.size
+
     fun uvarint(): Long {
         var v = 0L
         var shift = 0

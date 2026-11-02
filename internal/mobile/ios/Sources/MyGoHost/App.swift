@@ -126,6 +126,22 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 /// windows, the one in front last.
 final class RootViewController: UIViewController {
     var keyboard: CGFloat = 0
+    /// What the app asked of the system's bars and the screen's orientation.
+    var barStyle = "auto"
+    var barsHidden = false
+    var orientations: UIInterfaceOrientationMask = .all
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        switch barStyle {
+        case "light": return .lightContent
+        case "dark": return .darkContent
+        default: return .default
+        }
+    }
+    override var prefersStatusBarHidden: Bool { barsHidden }
+    override var prefersHomeIndicatorAutoHidden: Bool { barsHidden }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { orientations }
+    override var childForStatusBarHidden: UIViewController? { nil }
 
     override func loadView() {
         view = UIView()
