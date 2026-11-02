@@ -1,4 +1,4 @@
-//go:build (darwin && ios) || (!darwin && !windows)
+//go:build !darwin && !windows && !android
 
 package permissionflow
 

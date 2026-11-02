@@ -17,6 +17,7 @@ import (
 	"github.com/egoist/mygo/plugins/camera"
 	"github.com/egoist/mygo/plugins/imagepicker"
 	"github.com/egoist/mygo/plugins/location"
+	"github.com/egoist/mygo/plugins/permissionflow"
 	"github.com/egoist/mygo/plugins/preferences"
 	"github.com/egoist/mygo/plugins/sensors"
 	"github.com/egoist/mygo/plugins/videoplayer"
@@ -431,6 +432,18 @@ func (a *app) system(c *ui.Context) {
 				if s := a.results["camera"]; s != "" {
 					ui.Text(c, s).FontSize(13).Padding(4, 16).TextColor(t.TextMuted)
 				}
+				row("May it use the camera", func(ctx context.Context) string {
+					st, err := permissionflow.Check(permissionflow.Camera)
+					if err != nil {
+						return err.Error()
+					}
+					if st == permissionflow.NotDetermined {
+						if st, err = permissionflow.Request(ctx, permissionflow.Camera); err != nil {
+							return err.Error()
+						}
+					}
+					return st.String()
+				})
 				row("Count launches", func(ctx context.Context) string {
 					n := 0
 					preferences.Get("launches", &n)

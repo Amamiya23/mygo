@@ -219,6 +219,8 @@ if it imports it, with its usage descriptions and permissions added to the app:
 | `biometrics` | Face ID, Touch ID, fingerprints, the passcode |
 | `sensors` | The accelerometer, the gyroscope and the magnetometer |
 | `push` | APNs and Firebase tokens and messages (Firebase on Android needs a project) |
+| `purchases` | In-app purchases and subscriptions: StoreKit 2 and Google Play Billing |
+| `permissionflow` | Whether the app may use the camera, the microphone, photos, contacts…, asking, and the system's settings |
 | `preferences` | Small values kept between runs, on every platform |
 
 ## Writing a plugin
