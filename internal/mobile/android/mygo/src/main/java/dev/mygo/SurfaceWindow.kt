@@ -594,6 +594,16 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
         }
     }
 
+    /** The element TalkBack's cursor is on. */
+    private var accessFocus = View.NO_ID
+
+    private fun sendVirtual(id: Int, type: Int) {
+        val e = AccessibilityEvent(type)
+        e.packageName = context.packageName
+        e.setSource(surface, id)
+        (surface.parent as? android.view.ViewGroup)?.requestSendAccessibilityEvent(surface, e)
+    }
+
     /** TalkBack's view of the elements of native UI, as virtual views. */
     private inner class Provider : AccessibilityNodeProvider() {
         override fun createAccessibilityNodeInfo(virtualId: Int): AccessibilityNodeInfo? {
@@ -609,8 +619,17 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
             info.setParent(surface)
             info.packageName = context.packageName
             info.className = n.className
-            info.text = n.label.ifEmpty { null }
-            if (n.value.isNotEmpty()) info.stateDescription = n.value
+            if (n.role == 9L) {
+                // A text field: its text, under its name's hint, as EditText.
+                info.isEditable = true
+                info.text = n.value.ifEmpty { null }
+                info.hintText = n.label
+                info.isShowingHintText = n.value.isEmpty()
+                info.isPassword = n.states and 128 != 0L
+            } else {
+                info.text = n.label.ifEmpty { null }
+                if (n.value.isNotEmpty()) info.stateDescription = n.value
+            }
             if (n.hint.isNotEmpty()) info.tooltipText = n.hint
             val d = density
             val box = Rect((n.x * d).toInt(), (n.y * d).toInt(), ((n.x + n.w) * d).toInt(), ((n.y + n.h) * d).toInt())
@@ -625,6 +644,9 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
             info.isHeading = n.role == 43L
             info.isVisibleToUser = true
             info.isFocusable = true
+            info.isAccessibilityFocused = accessFocus == virtualId
+            info.addAction(if (accessFocus == virtualId) AccessibilityNodeInfo.AccessibilityAction.ACTION_CLEAR_ACCESSIBILITY_FOCUS
+                else AccessibilityNodeInfo.AccessibilityAction.ACTION_ACCESSIBILITY_FOCUS)
             if (n.actions and 1 != 0L) {
                 info.isClickable = true
                 info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
@@ -639,7 +661,22 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
                 AccessibilityNodeInfo.ACTION_CLICK -> "press"
                 AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> "increment"
                 AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> "decrement"
-                AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS -> return true
+                AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS -> {
+                    if (accessFocus != virtualId) {
+                        val old = accessFocus
+                        accessFocus = virtualId
+                        if (old != View.NO_ID) sendVirtual(old, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUS_CLEARED)
+                        sendVirtual(virtualId, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED)
+                    }
+                    return true
+                }
+                AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS -> {
+                    if (accessFocus == virtualId) {
+                        accessFocus = View.NO_ID
+                        sendVirtual(virtualId, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUS_CLEARED)
+                    }
+                    return true
+                }
                 else -> return false
             }
             val r = Go.ask(Event.accessibilityAction(wid, virtualId.toLong(), name)) ?: return false

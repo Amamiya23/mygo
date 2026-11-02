@@ -551,6 +551,11 @@ final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate
         set {}
     }
 
+    // VoiceOver's two-finger scrub goes back, as Android's back does.
+    override func accessibilityPerformEscape() -> Bool {
+        Go.answer(Event.backPressed(id: id)) { BackPressedReply(&$0).handled } ?? false
+    }
+
     func accessAction(_ node: Int, _ action: String) -> Bool {
         Go.answer(Event.accessibilityAction(id: id, node: node, action: action)) { AccessibilityActionReply(&$0).handled } ?? false
     }
