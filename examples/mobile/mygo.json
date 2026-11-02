@@ -1,5 +1,8 @@
 {
   "name": "mobile",
   "displayName": "Mobile",
-  "identifier": "dev.mygo.mobile"
+  "identifier": "dev.mygo.mobile",
+  "urlSchemes": [
+    "mygomobile"
+  ]
 }

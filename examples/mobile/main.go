@@ -53,6 +53,7 @@ type app struct {
 	searched                                                 string
 
 	// System.
+	link    string
 	bars    bool
 	status  string
 	results map[string]string
@@ -328,6 +329,9 @@ func (a *app) system(c *ui.Context) {
 				if mobile.ListRow(c.Key("any"), mobile.RowOptions{Title: "Turn freely"}).Clicked() {
 					mygo.SetOrientations(mygo.OrientationAny)
 				}
+				if a.link != "" {
+					mobile.ListRow(c.Key("link"), mobile.RowOptions{Title: "Opened with", Subtitle: a.link})
+				}
 				if mobile.ListRow(c.Key("status"), mobile.RowOptions{Title: "Network and battery", Subtitle: a.status}).Clicked() {
 					go func() {
 						n, b := mygo.Network.Status(), mygo.Power.Battery()
@@ -495,6 +499,12 @@ func main() {
 	for i := range 30 {
 		a.rows = append(a.rows, fmt.Sprintf("Row %d", i+1))
 	}
+	mygo.App.OnOpenURL(func(u string) {
+		a.link, a.tab = u, 4
+		if a.win != nil {
+			a.win.Update(func() {})
+		}
+	})
 	mygo.App.WhenReady(func() {
 		a.win = mygo.NewWindow(mygo.WindowOptions{Title: "Mobile", Width: 420, Height: 800, Content: ui.View(a.view)})
 	})
