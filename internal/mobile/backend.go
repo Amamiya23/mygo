@@ -65,6 +65,8 @@ type Backend struct {
 	// shown lists the windows on screen, the one in front last.
 	shown []*window
 	dark  bool
+	// pluginEvents hears the events of plugins' native code.
+	pluginEvents func(plugin, name string, data []byte)
 	// ready is set once the core heard Ready, background while the app is
 	// in the background.
 	ready, background bool

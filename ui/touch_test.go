@@ -452,3 +452,23 @@ func TestKeyboardRevealsFocus(t *testing.T) {
 		t.Errorf("under the keyboard: scrolled from %v to %v", y0, s.Y)
 	}
 }
+
+// A finger leaves no hover behind: what scrolls does not keep its bars.
+func TestTouchLeavesNoHover(t *testing.T) {
+	tt := coreNewTester(func(c *context) {
+		coreScroll(c).Fill().Children(func() { coreBox(c).Height(1000).Shrink(0) })
+	}, 200, 200)
+	tt.Frame()
+	tt.TouchDown(100, 150)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(100, 130)
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(100, 100)
+	tt.Advance(200 * time.Millisecond)
+	tt.TouchUp(100, 100)
+	tt.Advance(5 * time.Second)
+	tt.Frame()
+	if len(tt.rt.hover) != 0 {
+		t.Errorf("hovering %v after the finger lifted", tt.rt.hover)
+	}
+}

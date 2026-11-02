@@ -91,6 +91,10 @@ const longPressDelay = 500 * time.Millisecond
 // which takes about half a second, as a UIScrollView's bounce does.
 const springOmega = 14.14
 
+// bounceSpeed is the fastest content hits an end, in DIPs a second, which the
+// spring takes it past by about 100 DIPs.
+const bounceSpeed = 4000
+
 // indicatorHold is how long a scroll indicator shows after the content last
 // moved, and indicatorFade how long it takes to go.
 const (
@@ -260,6 +264,8 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		}
 		t.sample(rt.now(), x, y)
 		vx, vy := t.velocity(rt.now())
+		v := flingVelocity(Point{vx, vy})
+		vx, vy = v.X, v.Y
 		s := rt.states[was.target]
 		if was.axes&Horizontal == 0 {
 			vx = 0
@@ -279,8 +285,6 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 			rt.requestFrame()
 		}
 		return true
-	case platform.PointerLeave:
-		return t.panning || t.swallow
 	}
 	return false
 }
@@ -595,7 +599,13 @@ func (s *state) rawFor(axis int, over float32) float32 {
 // shows, at a speed in DIPs a second.
 func (rt *engine) startBounce(s *state, vx, vy float32) {
 	s.overRaw = [2]float32{}
-	s.overV = [2]float32{vx, vy}
+	// A throw at the end shows as far as UIKit's does at most, and less on
+	// Android's, whose content yields less.
+	limit := float32(bounceSpeed)
+	if overscrollKind == overscrollStretch {
+		limit /= 2
+	}
+	s.overV = [2]float32{max(-limit, min(vx, limit)), max(-limit, min(vy, limit))}
 	if rt.preferences().ReduceMotion {
 		s.over, s.overV = [2]float32{}, [2]float32{}
 		rt.requestFrame()

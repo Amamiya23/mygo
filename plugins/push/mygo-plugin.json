@@ -1,0 +1,16 @@
+{
+  "mobile": {
+    "id": "push",
+    "ios": {
+      "sources": ["ios/*.swift"],
+      "class": "PushPlugin",
+      "infoPlist": {"UIBackgroundModes": ["remote-notification"]}
+    },
+    "android": {
+      "sources": ["android/*.kt"],
+      "class": "PushPlugin",
+      "dependencies": ["com.google.firebase:firebase-messaging:24.1.2"],
+      "application": ["        <service android:name=\"dev.mygo.PushService\" android:exported=\"false\"><intent-filter><action android:name=\"com.google.firebase.MESSAGING_EVENT\" /></intent-filter></service>"]
+    }
+  }
+}

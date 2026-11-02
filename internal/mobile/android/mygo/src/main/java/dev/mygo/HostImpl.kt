@@ -116,6 +116,7 @@ object HostImpl : HostCalls {
             val i = line.indexOf('=')
             if (i > 0) Os.setenv(line.substring(0, i), line.substring(i + 1), true)
         }
+        registerPlugins()
         MyGoNative.start()
     }
 
@@ -378,6 +379,7 @@ object HostImpl : HostCalls {
     }
 
     fun activityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (PluginHost.activityResult(requestCode, resultCode, data)) return
         if (requestCode == SAVE_FILE) {
             val req = saveReq
             val uri = data?.data
@@ -489,6 +491,7 @@ object HostImpl : HostCalls {
     }
 
     fun permissionsResult(requestCode: Int, results: IntArray) {
+        if (PluginHost.permissionsResult(requestCode, results)) return
         if (requestCode == ASK_NOTIFICATIONS) {
             val granted = results.isNotEmpty() && results[0] == PackageManager.PERMISSION_GRANTED
             val notes = pendingNotes
@@ -743,6 +746,8 @@ object HostImpl : HostCalls {
     override fun setBarItems(c: SetBarItemsCall) {
         windows[c.id]?.let { Navigation.setBarItems(it, c) }
     }
+
+    override fun pluginCall(c: PluginCallCall) = PluginHost.call(c)
 
     override fun haptic(c: HapticCall) {
         val v: View = front()?.view ?: root

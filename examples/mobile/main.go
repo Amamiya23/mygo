@@ -7,11 +7,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/biometrics"
+	"github.com/egoist/mygo/plugins/imagepicker"
+	"github.com/egoist/mygo/plugins/location"
+	"github.com/egoist/mygo/plugins/preferences"
+	"github.com/egoist/mygo/plugins/sensors"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/mobile"
 )
@@ -41,8 +47,9 @@ type app struct {
 	searched                                                 string
 
 	// System.
-	bars   bool
-	status string
+	bars    bool
+	status  string
+	results map[string]string
 }
 
 func heading(c *ui.Context, s string) { ui.Text(c, s).FontSize(13).TextColor(c.Theme().TextMuted).PaddingX(16).Padding(16, 16, 4, 16) }
@@ -264,6 +271,71 @@ func (a *app) system(c *ui.Context) {
 					}()
 				}
 			})
+			mobile.Section(c, "Plugins with native code", func() {
+				row := func(title string, run func(ctx context.Context) string) {
+					if mobile.ListRow(c.Key(title), mobile.RowOptions{Title: title, Subtitle: a.results[title]}).Clicked() {
+						go func() {
+							s := run(context.Background())
+							a.win.Update(func() { a.results[title] = s })
+						}()
+					}
+				}
+				row("Where am I", func(ctx context.Context) string {
+					f, err := location.Current(ctx)
+					if err != nil {
+						return err.Error()
+					}
+					return fmt.Sprintf("%.4f, %.4f ±%.0f m", f.Latitude, f.Longitude, f.Accuracy)
+				})
+				row("Is it me", func(ctx context.Context) string {
+					kind, err := biometrics.Available(ctx)
+					if err != nil {
+						return err.Error()
+					}
+					if kind == biometrics.None {
+						return "this device has no way to tell"
+					}
+					if err := biometrics.Authenticate(ctx, "Confirm it's you"); err != nil {
+						return err.Error()
+					}
+					return "It's you, by " + string(kind)
+				})
+				row("Choose a photo", func(ctx context.Context) string {
+					paths, err := imagepicker.Pick(ctx, imagepicker.Options{})
+					if err != nil {
+						return err.Error()
+					}
+					return fmt.Sprint(paths)
+				})
+				row("Read the accelerometer", func(ctx context.Context) string {
+					done := make(chan sensors.Reading, 1)
+					stop, err := sensors.Watch(ctx, sensors.Accelerometer, 100*time.Millisecond, func(r sensors.Reading) {
+						select {
+						case done <- r:
+						default:
+						}
+					})
+					if err != nil {
+						return err.Error()
+					}
+					defer stop()
+					select {
+					case r := <-done:
+						return fmt.Sprintf("%.2f, %.2f, %.2f m/s²", r.X, r.Y, r.Z)
+					case <-time.After(2 * time.Second):
+						return "no reading"
+					}
+				})
+				row("Count launches", func(ctx context.Context) string {
+					n := 0
+					preferences.Get("launches", &n)
+					n++
+					if err := preferences.Set("launches", n); err != nil {
+						return err.Error()
+					}
+					return fmt.Sprintf("%d, kept between runs", n)
+				})
+			})
 			ui.Text(c, "Native UI, drawn by MyGo.").FontSize(13).TextColor(t.TextMuted).PaddingX(16)
 		})
 	})
@@ -318,7 +390,7 @@ func (a *app) view(c *ui.Context) {
 }
 
 func main() {
-	a := &app{wifi: true, when: time.Now()}
+	a := &app{wifi: true, when: time.Now(), results: map[string]string{}}
 	for i := range 30 {
 		a.rows = append(a.rows, fmt.Sprintf("Row %d", i+1))
 	}

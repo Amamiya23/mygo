@@ -101,6 +101,13 @@ func (t *iosToolchain) buildApp(ctx context.Context, c, dc *Config, tk *task, op
 	if err := os.CopyFS(host, iosHost.Files); err != nil {
 		return "", err
 	}
+	plugins, err := c.mobilePlugins("ios")
+	if err != nil {
+		return "", err
+	}
+	if err := plugins.writeSwift(filepath.Join(host, "Sources", "MyGoHost")); err != nil {
+		return "", err
+	}
 	swift, _ := filepath.Glob(filepath.Join(host, "Sources", "MyGoHost", "*.swift"))
 	bundle := filepath.Join(dir, dc.Name+".app")
 	os.RemoveAll(bundle)
@@ -117,6 +124,9 @@ func (t *iosToolchain) buildApp(ctx context.Context, c, dc *Config, tk *task, op
 	args = append(args, lib, "-o", filepath.Join(bundle, exe), "-Xlinker", "-dead_strip", "-lresolv")
 	for _, f := range []string{"UIKit", "WebKit", "Metal", "QuartzCore", "CoreText", "CoreGraphics", "Security", "CoreFoundation",
 		"UserNotifications", "UniformTypeIdentifiers", "Network"} {
+		args = append(args, "-framework", f)
+	}
+	for _, f := range plugins.frameworks() {
 		args = append(args, "-framework", f)
 	}
 	if out, err := exec.CommandContext(ctx, "xcrun", args...).CombinedOutput(); err != nil {
@@ -150,6 +160,9 @@ func (t *iosToolchain) buildApp(ctx context.Context, c, dc *Config, tk *task, op
 		for k, v := range icons {
 			info[k] = v
 		}
+	}
+	for k, v := range plugins.infoPlist() {
+		info[k] = v
 	}
 	for k, v := range dc.IOS.InfoPlist {
 		info[k] = v // the app's own keys win

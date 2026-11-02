@@ -65,20 +65,21 @@ const (
 	CallSetClipboardImage      = 59
 	CallPopupMenu              = 60
 	CallSetBarItems            = 61
-	CallHaptic                 = 62
-	CallRequestFrame           = 63
-	CallSetTextInput           = 64
-	CallSetCursor              = 65
-	CallAccessibilityChanged   = 66
-	CallAnnounce               = 67
-	CallShowMenu               = 68
-	CallShowMagnifier          = 69
-	CallHideMagnifier          = 70
-	CallTextMetrics            = 71
-	CallMeasureText            = 72
-	CallTextAdvances           = 73
-	CallDrawText               = 74
-	CallRegisterFont           = 75
+	CallPluginCall             = 62
+	CallHaptic                 = 63
+	CallRequestFrame           = 64
+	CallSetTextInput           = 65
+	CallSetCursor              = 66
+	CallAccessibilityChanged   = 67
+	CallAnnounce               = 68
+	CallShowMenu               = 69
+	CallShowMagnifier          = 70
+	CallHideMagnifier          = 71
+	CallTextMetrics            = 72
+	CallMeasureText            = 73
+	CallTextAdvances           = 74
+	CallDrawText               = 75
+	CallRegisterFont           = 76
 )
 
 // Numbers of events.
@@ -92,51 +93,53 @@ const (
 	EventMemoryWarning       = 7
 	EventTerminating         = 8
 	EventResized             = 9
-	EventNetworkChanged      = 10
-	EventShareResult         = 11
-	EventMenuPicked          = 12
-	EventBarItemClicked      = 13
-	EventTabSelected         = 14
-	EventPopped              = 15
-	EventBackPressed         = 16
-	EventMessage             = 17
-	EventWillNavigate        = 18
-	EventNewWindow           = 19
-	EventPageState           = 20
-	EventNavigationStarted   = 21
-	EventNavigationCommitted = 22
-	EventLoadFinished        = 23
-	EventLoadFailed          = 24
-	EventClosedByPage        = 25
-	EventProcessGone         = 26
-	EventPermissionRequested = 27
-	EventSchemeRequest       = 28
-	EventSchemeCancel        = 29
-	EventAsyncResult         = 30
-	EventCaptured            = 31
-	EventMessageBoxResult    = 32
-	EventFilesResult         = 33
-	EventNotifyDone          = 34
-	EventNotificationClicked = 35
-	EventFrame               = 36
-	EventSurfaceChanged      = 37
-	EventSurfaceDestroyed    = 38
-	EventTouch               = 39
-	EventScroll              = 40
-	EventKey                 = 41
-	EventTextReplace         = 42
-	EventTextMark            = 43
-	EventTextUnmark          = 44
-	EventTextDelete          = 45
-	EventTextSelect          = 46
-	EventTextCommand         = 47
-	EventTextState           = 48
-	EventTextRange           = 49
-	EventTextBounds          = 50
-	EventTextIndexAt         = 51
-	EventTextInputEnded      = 52
-	EventAccessibilityTree   = 53
-	EventAccessibilityAction = 54
+	EventPluginResult        = 10
+	EventPluginEvent         = 11
+	EventNetworkChanged      = 12
+	EventShareResult         = 13
+	EventMenuPicked          = 14
+	EventBarItemClicked      = 15
+	EventTabSelected         = 16
+	EventPopped              = 17
+	EventBackPressed         = 18
+	EventMessage             = 19
+	EventWillNavigate        = 20
+	EventNewWindow           = 21
+	EventPageState           = 22
+	EventNavigationStarted   = 23
+	EventNavigationCommitted = 24
+	EventLoadFinished        = 25
+	EventLoadFailed          = 26
+	EventClosedByPage        = 27
+	EventProcessGone         = 28
+	EventPermissionRequested = 29
+	EventSchemeRequest       = 30
+	EventSchemeCancel        = 31
+	EventAsyncResult         = 32
+	EventCaptured            = 33
+	EventMessageBoxResult    = 34
+	EventFilesResult         = 35
+	EventNotifyDone          = 36
+	EventNotificationClicked = 37
+	EventFrame               = 38
+	EventSurfaceChanged      = 39
+	EventSurfaceDestroyed    = 40
+	EventTouch               = 41
+	EventScroll              = 42
+	EventKey                 = 43
+	EventTextReplace         = 44
+	EventTextMark            = 45
+	EventTextUnmark          = 46
+	EventTextDelete          = 47
+	EventTextSelect          = 48
+	EventTextCommand         = 49
+	EventTextState           = 50
+	EventTextRange           = 51
+	EventTextBounds          = 52
+	EventTextIndexAt         = 53
+	EventTextInputEnded      = 54
+	EventAccessibilityTree   = 55
+	EventAccessibilityAction = 56
 )
 
 // AppInfo is the app's bundle and the system's settings, asked once at start.
@@ -1192,6 +1195,25 @@ func (m *SetBarItems) Encode(w *Writer) {
 // Wait reports whether the caller waits for the host to run it.
 func (*SetBarItems) Wait() bool { return false }
 
+// PluginCall is a call of a plugin's native code: Args and PluginResult's Result are JSON.
+type PluginCall struct {
+	Req    int
+	Plugin string
+	Method string
+	Args   string
+}
+
+func (m *PluginCall) Encode(w *Writer) {
+	w.Uvarint(CallPluginCall)
+	w.Int(m.Req)
+	w.String(m.Plugin)
+	w.String(m.Method)
+	w.String(m.Args)
+}
+
+// Wait reports whether the caller waits for the host to run it.
+func (*PluginCall) Wait() bool { return false }
+
 // Haptic is "selection", "light", "medium", "heavy", "success", "warning" or "error".
 type Haptic struct {
 	Kind string
@@ -1618,6 +1640,33 @@ func (m *ResizedEvent) Decode(r *Reader) {
 	m.SafeBottom = r.Float()
 	m.SafeRight = r.Float()
 	m.Keyboard = r.Float()
+}
+
+type PluginResultEvent struct {
+	Req    int
+	Result string
+	Error  string
+	Code   string
+}
+
+func (m *PluginResultEvent) Decode(r *Reader) {
+	m.Req = r.Int()
+	m.Result = r.String()
+	m.Error = r.String()
+	m.Code = r.String()
+}
+
+// PluginEventEvent is an event of a plugin's native code: Data is JSON.
+type PluginEventEvent struct {
+	Plugin string
+	Name   string
+	Data   string
+}
+
+func (m *PluginEventEvent) Decode(r *Reader) {
+	m.Plugin = r.String()
+	m.Name = r.String()
+	m.Data = r.String()
 }
 
 type NetworkChangedEvent struct {

@@ -123,6 +123,8 @@ var calls = []msg{
 		args: []field{f("ID", "int"), f("Req", "int"), f("X", "float"), f("Y", "float"), f("Items", "bytes")}},
 	{name: "SetBarItems", doc: "the buttons at the end of the window's navigation bar; BarItemClicked tells which: titles, symbols and icons by index",
 		args: []field{f("ID", "int"), f("Titles", "strings"), f("Symbols", "strings"), f("Icons", "strings")}},
+	{name: "PluginCall", doc: "a call of a plugin's native code: Args and PluginResult's Result are JSON", args: []field{f("Req", "int"),
+		f("Plugin", "string"), f("Method", "string"), f("Args", "string")}},
 	{name: "Haptic", doc: `"selection", "light", "medium", "heavy", "success", "warning" or "error"`, args: []field{f("Kind", "string")}},
 
 	// Native UI.
@@ -174,6 +176,8 @@ var events = []msg{
 	{name: "Resized", doc: "the window's size in DIPs, the scale, and the insets of what covers it: the system's bars, the cutout, the keyboard",
 		args: []field{f("ID", "int"), f("Width", "float"), f("Height", "float"), f("Scale", "float"),
 			f("SafeTop", "float"), f("SafeLeft", "float"), f("SafeBottom", "float"), f("SafeRight", "float"), f("Keyboard", "float")}},
+	{name: "PluginResult", args: []field{f("Req", "int"), f("Result", "string"), f("Error", "string"), f("Code", "string")}},
+	{name: "PluginEvent", doc: "an event of a plugin's native code: Data is JSON", args: []field{f("Plugin", "string"), f("Name", "string"), f("Data", "string")}},
 	{name: "NetworkChanged", args: []field{f("Online", "bool"), f("Metered", "bool")}},
 	{name: "ShareResult", args: []field{f("Req", "int"), f("Error", "string")}},
 	{name: "MenuPicked", args: []field{f("Req", "int"), f("Item", "int")}},

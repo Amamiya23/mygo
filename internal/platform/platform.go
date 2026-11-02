@@ -1294,6 +1294,26 @@ type DeviceBackend interface {
 	SetBarItems(w Window, items []BarItem)
 }
 
+// PluginBackend is a Backend whose host runs plugins' native code: the Swift
+// and Kotlin that plugins bring (mygo-plugin.json), which it reaches by name.
+type PluginBackend interface {
+	// PluginCall calls a method of a plugin's native code, with JSON, and
+	// done with its JSON answer, or an error (a PluginError, with its code).
+	PluginCall(plugin, method string, args []byte, done func(result []byte, err error))
+	// OnPluginEvent sets who hears the events of plugins' native code.
+	OnPluginEvent(fn func(plugin, name string, data []byte))
+}
+
+// PluginError is an error of a plugin's native code.
+type PluginError struct{ Code, Message string }
+
+func (e *PluginError) Error() string {
+	if e.Code == "" {
+		return e.Message
+	}
+	return e.Code + ": " + e.Message
+}
+
 // Orientations of the screen, for DeviceBackend.SetOrientations.
 const (
 	OrientationPortrait uint32 = 1 << iota

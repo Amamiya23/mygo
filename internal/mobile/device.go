@@ -59,3 +59,18 @@ func (b *Backend) SetBarItems(pw platform.Window, items []platform.BarItem) {
 	}
 	b.call(&m, nil)
 }
+
+func (b *Backend) PluginCall(plugin, method string, args []byte, done func([]byte, error)) {
+	req := b.request(func(r wire.Reader) {
+		var e wire.PluginResultEvent
+		e.Decode(&r)
+		if e.Error != "" || e.Code != "" {
+			done(nil, &platform.PluginError{Code: e.Code, Message: e.Error})
+			return
+		}
+		done([]byte(e.Result), nil)
+	})
+	b.call(&wire.PluginCall{Req: req, Plugin: plugin, Method: method, Args: string(args)}, nil)
+}
+
+func (b *Backend) OnPluginEvent(fn func(plugin, name string, data []byte)) { b.pluginEvents = fn }

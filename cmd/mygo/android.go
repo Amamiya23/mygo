@@ -169,9 +169,9 @@ func (t *androidToolchain) project(dir string) error {
 
 // manifest is the app's AndroidManifest.xml: its permissions and URL
 // schemes over the host's.
-func androidManifest(c *Config) []byte {
+func androidManifest(c *Config, plugins mobilePlugins) []byte {
 	perms := []string{"android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE", "android.permission.POST_NOTIFICATIONS"}
-	for _, p := range c.Android.Permissions {
+	for _, p := range append(plugins.permissions(), c.Android.Permissions...) {
 		if !strings.Contains(p, ".") {
 			p = "android.permission." + p
 		}
@@ -210,7 +210,11 @@ func androidManifest(c *Config) []byte {
             </intent-filter>
 `, s)
 	}
-	b.WriteString("        </activity>\n    </application>\n</manifest>\n")
+	b.WriteString("        </activity>\n")
+	for _, x := range plugins.manifestApplication() {
+		b.WriteString(x + "\n")
+	}
+	b.WriteString("    </application>\n</manifest>\n")
 	return []byte(b.String())
 }
 
@@ -269,8 +273,15 @@ func (t *androidToolchain) gradle(ctx context.Context, c, dc *Config, dir, work,
 	if err != nil {
 		return err
 	}
+	plugins, err := c.mobilePlugins("android")
+	if err != nil {
+		return err
+	}
+	if err := plugins.writeKotlin(filepath.Join(dir, "mygo", "src", "main", "java", "dev", "mygo")); err != nil {
+		return err
+	}
 	manifest := filepath.Join(work, "AndroidManifest.xml")
-	if err := os.WriteFile(manifest, androidManifest(dc), 0o644); err != nil {
+	if err := os.WriteFile(manifest, androidManifest(dc, plugins), 0o644); err != nil {
 		return err
 	}
 	assets := filepath.Join(work, "assets")
@@ -286,15 +297,16 @@ func (t *androidToolchain) gradle(ctx context.Context, c, dc *Config, dir, work,
 		return err
 	}
 	props := map[string]string{
-		"mygoApplicationId": dc.Identifier,
-		"mygoAppName":       dc.Name,
-		"mygoVersionCode":   strconv.Itoa(dc.Android.versionCode(dc.Version)),
-		"mygoVersionName":   dc.Version,
-		"mygoMinSdk":        strconv.Itoa(dc.Android.MinSdk),
-		"mygoJniLibs":       jniLibs,
-		"mygoAssets":        assets,
-		"mygoRes":           res,
-		"mygoManifest":      manifest,
+		"mygoApplicationId":      dc.Identifier,
+		"mygoAppName":            dc.Name,
+		"mygoVersionCode":        strconv.Itoa(dc.Android.versionCode(dc.Version)),
+		"mygoVersionName":        dc.Version,
+		"mygoMinSdk":             strconv.Itoa(dc.Android.MinSdk),
+		"mygoJniLibs":            jniLibs,
+		"mygoAssets":             assets,
+		"mygoRes":                res,
+		"mygoManifest":           manifest,
+		"mygoPluginDependencies": strings.Join(plugins.dependencies(), ","),
 	}
 	if hasIcon {
 		props["mygoIcon"] = "@mipmap/ic_launcher"

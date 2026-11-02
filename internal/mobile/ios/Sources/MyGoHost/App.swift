@@ -78,6 +78,7 @@ enum Go {
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = Host.shared
+        registerPlugins()
         Go.start()
         return true
     }
@@ -86,6 +87,20 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         let c = UISceneConfiguration(name: nil, sessionRole: session.role)
         c.delegateClass = SceneDelegate.self
         return c
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken token: Data) {
+        PluginHost.applicationEvent(.pushToken(token))
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        PluginHost.applicationEvent(.pushError(error))
+    }
+
+    func application(_ application: UIApplication, didReceiveRemoteNotification info: [AnyHashable: Any],
+                     fetchCompletionHandler done: @escaping (UIBackgroundFetchResult) -> Void) {
+        PluginHost.applicationEvent(.pushMessage(info))
+        done(.newData)
     }
 
     func applicationDidReceiveMemoryWarning(_ application: UIApplication) { Go.send(Event.memoryWarning()) }

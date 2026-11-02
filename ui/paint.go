@@ -1159,7 +1159,8 @@ func (p *Painter) scrollbars(e *node) {
 	// (scrollbarPress). Kept, they show as on hover, the same thumb on no
 	// track, so that the pointer coming over changes nothing.
 	hide, keep := e.scrollbars()
-	st.barsShown = !hide && (keep || hovered || dragging)
+	// A finger on it is no pointer hovering.
+	st.barsShown = !hide && (keep || hovered && !rt.touch.down || dragging)
 	color := theme.Scrollbar
 	touching := false
 	if !st.barsShown {

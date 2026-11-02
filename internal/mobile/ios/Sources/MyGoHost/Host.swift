@@ -512,6 +512,8 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
         Navigation.shared.controller(w).navigationItem.rightBarButtonItems = items.reversed()
     }
 
+    func pluginCall(_ c: PluginCallCall) { PluginHost.call(c) }
+
     func haptic(_ c: HapticCall) {
         switch c.kind {
         case "selection": UISelectionFeedbackGenerator().selectionChanged()
