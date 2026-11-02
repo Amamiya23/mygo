@@ -896,7 +896,9 @@ fake host. Desktop files of `darwin` and `linux` exclude `ios` and
   Android's text is Minikin's and Skia's, through the host's `Paint`
   (`internal/text/paint_android.go`): an engine sharing the browsers'
   layout of grapheme clusters (`clusters.go`), whose words the host
-  measures (`getTextRunAdvances`) and whose clusters it draws. Frames come
+  measures (`getTextRunAdvances`) and whose clusters it draws. These calls go
+  straight to the host on the caller's thread (`callHere`, which joins the
+  JVM), a screen of new text being hundreds of them. Frames come
   at the display's refreshes (CADisplayLink, Choreographer) when asked.
 - **Input.** A finger is the pointer while it touches (`SurfaceEvent.Touch`,
   the first one; two pinch), and `ui` pans what scrolls under one that
@@ -907,12 +909,36 @@ fake host. Desktop files of `darwin` and `linux` exclude `ios` and
   drag that starts at once presses nothing. Android's back goes first to
   the stack in front, then to the content as Escape and `KeyBack`, which
   `ui` reports taken when a shortcut claims it (a Router only while it
-  can go back); untaken, the app goes to the background. The hosts take the keyboard
-  with `UITextInput` and an `InputConnection`, the text around the caret
-  mirrored from `SetTextInput`, the input methods' marked or composing text
-  sent as compositions; VoiceOver and TalkBack ask for the accessibility
-  tree when they read the window (`AccessibilityTree`), which turns on the
-  content's (`AccessibilityOn`).
+  can go back); untaken, the app goes to the background. `ui` tells the
+  surface whether it takes back (`SetBackAvailable`), for Android's predictive
+  back, which `ui.Router` follows (`ui/touch_back.go`, with iOS's edge swipe).
+  A finger locks to an axis and a container, overscrolls and long-presses
+  (`ui/touch.go`); all of it hangs on hooks `enableTouch` sets, for desktops not
+  to link it. The hosts take the keyboard with `UITextInput` and an
+  `InputConnection`, which edit the input's `TextInputClient` by UTF-16 ranges:
+  they keep a copy of the text around the selection, and each edit's event
+  waits for the state after it (`internal/mobile/textinput.go`), as keyboards
+  read on at once; the content's own changes come with `SetTextInput`, checked
+  after each frame. Selection handles draw in `ui` (`ui/touch_text.go`), the
+  edit menu and the magnifier are the system's. VoiceOver and TalkBack ask for
+  the accessibility tree when they read the window (`AccessibilityTree`), which
+  turns on the content's (`AccessibilityOn`).
+- **Views in native UI.** A web view or a plugin's view is a window whose
+  `Parent` is the surface's, under it in the host, in a view that clips it
+  (`PlaceViews`), showing through the frames' holes (`scene.OpHole`) as on
+  desktops. iOS gives the holder a `-1` z position, under the renderer's layer;
+  Android's `SurfaceView` goes over the window (`setZOrderOnTop`, made again the
+  first time, off the call that asked: the surface going waits for Go, which
+  waits for the call). The hosts route fingers by the placements' boxes
+  themselves, without asking Go.
+- **The background.** `Background` is waited for: on iOS the GPU is off limits
+  once `sceneDidEnterBackground` returns, and iOS ends what uses it. `frame`
+  draws nothing in the background, and asks again on the way back.
+- **Plugins' native code.** `mygo-plugin.json`'s `mobile` names Swift and Kotlin,
+  which `cmd/mygo/mobile_plugins.go` copies into the host's sources with a
+  generated `PluginRegistry`, and which `PluginCall` and `PluginEvent` reach
+  (`Plugins.swift`, `Plugins.kt`, `native.go`), with JSON. Their frameworks,
+  Info.plist keys, permissions and Gradle dependencies join the app's.
 - **Files** are watched with inotify on Android (`internal/inotify`, as
   on desktop Linux) and kqueue on iOS (`internal/kqueue`; see "Watching
   files").

@@ -79,6 +79,7 @@ go run ./cmd/mygo dev -platform android examples/todo    # on the device or emul
 go run ./cmd/mygo build -platform ios/simulator examples/counter-native   # an .app for the simulator (ios: a signed .ipa)
 go run ./cmd/mygo build -platform android examples/counter-native         # an .apk and an .aab
 go generate ./internal/mobile/wire          # the messages of phones' backend and hosts: Go, Swift, Kotlin
+go run ./cmd/mygo dev -platform ios examples/mobile      # phones' gestures, widgets, plugins (ui/mobile)
 go run ./examples/gallery                  # the native UI toolkit's tour
 go run ./examples/code-editor              # the code editor and the diff viewer (ui/editor)
 go run ./examples/markdown-chat            # Markdown replies streaming in (ui/markdown)
@@ -135,6 +136,11 @@ Windows GUI tests need Windows with the WebView2 Runtime (a GitHub Actions
   (`mygo_noinspector`): a socket (`MYGO_AUTOMATION`) through which
   other processes drive the app, reaching native UI only through
   `surface.Automate`, which it sets.
+  The location, imagepicker, camera, videoplayer, biometrics, sensors and
+  push plugins are for phones, with Swift and Kotlin beside the Go, which
+  their `mygo-plugin.json`'s `mobile` names: they reach it with
+  `mygo.Native`, and an app has none of it unless it imports them. Package
+  `ui/mobile` is phones' widgets on ui's public API.
   The permissionflow plugin is Go only too, after PermissionFlow: TCC's
   permissions through purego on macOS, with a panel of AppKit under
   System Settings to drag the app from, the consent store on Windows,
