@@ -17,6 +17,7 @@ class CameraPlugin : MyGoPlugin {
     private class Cam(val view: PreviewView) {
         val capture = ImageCapture.Builder().build()
         var bound = false
+        var error = "the camera is not running"
     }
 
     private val cams = HashMap<Long, Cam>()
@@ -35,16 +36,26 @@ class CameraPlugin : MyGoPlugin {
 
     private fun start(c: Cam, front: Boolean) {
         PluginHost.requestPermissions(arrayOf(Manifest.permission.CAMERA)) { granted ->
-            if (!granted) return@requestPermissions
+            if (!granted) {
+                c.error = "the app may not use the camera"
+                return@requestPermissions
+            }
             val ctx = PluginHost.context
             val future = ProcessCameraProvider.getInstance(ctx)
             future.addListener({
-                val owner = PluginHost.activity as? LifecycleOwner ?: return@addListener
+                val owner = PluginHost.activity as? LifecycleOwner
+                if (owner == null) {
+                    c.error = "no window to show the camera in"
+                    return@addListener
+                }
                 val preview = Preview.Builder().build().also { it.surfaceProvider = c.view.surfaceProvider }
                 val which = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
                 runCatching {
                     future.get().bindToLifecycle(owner, which, preview, c.capture)
                     c.bound = true
+                }.onFailure {
+                    c.error = it.toString()
+                    android.util.Log.e("mygo", "camera: $it")
                 }
             }, ContextCompat.getMainExecutor(ctx))
         }
@@ -60,7 +71,7 @@ class CameraPlugin : MyGoPlugin {
         when (method) {
             "takePhoto" -> {
                 if (!c.bound) {
-                    reply.failure(PluginFailure("NoCamera", "the camera is not running"))
+                    reply.failure(PluginFailure("NoCamera", c.error))
                     return
                 }
                 val ctx = PluginHost.context
