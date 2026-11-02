@@ -411,6 +411,23 @@ func (e *node) theme() *Theme {
 // Size returns the size of the window's content in DIPs.
 func (c *context) Size() (width, height float32) { return c.w, c.h }
 
+// SafeArea returns how far in from each edge of the window what the system
+// draws covers it, in DIPs: a phone's bars, its cutout and the keyboard. The
+// window's root keeps its content inside them; what draws in the Overlay, as
+// a sheet, or under them, reads them here.
+func (c *context) SafeArea() (top, right, bottom, left float32) {
+	h, ok := c.rt.host.(interface{ insets() platform.Insets })
+	if !ok {
+		return 0, 0, 0, 0
+	}
+	in := h.insets()
+	z := float32(1)
+	if c.rt.zoomed() {
+		z = c.rt.contentZoom
+	}
+	return float32(in.Top) / z, float32(in.Right) / z, float32(in.Bottom) / z, float32(in.Left) / z
+}
+
 // TitleBar is the room the window controls take at the top of a window
 // with a hidden title bar, in DIPs: they sit in a band of Height along the
 // top edge, Left wide from the left edge and Right wide from the right.

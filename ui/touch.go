@@ -96,6 +96,9 @@ const (
 	indicatorFade = 250 * time.Millisecond
 )
 
+// touchIndicatorWidth is how wide a scroll indicator is, as UIKit's.
+const touchIndicatorWidth = 3
+
 // touchPan is the finger on the screen.
 type touchPan struct {
 	down    bool
@@ -178,6 +181,14 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 			axis := Vertical
 			if abs32(dx) > abs32(dy) {
 				axis = Horizontal
+			}
+			if d := rt.draggableAlong(t.x0, t.y0, axis); d != nil && d != rt.pressed {
+				// A row's content takes clicks, the row what goes across.
+				rt.cancelPress()
+				t.waiting = false
+				rt.pressDraggable(d, t.x0, t.y0)
+				t.dragging = true
+				return false
 			}
 			if rt.dragsPress(axis) {
 				return t.waiting
@@ -320,6 +331,35 @@ func (rt *engine) dragsPress(axis Orientation) bool {
 		return true
 	}
 	return false
+}
+
+// draggableAlong returns the innermost Draggable around what is under x, y
+// that moves along axis, if nothing inside it scrolls that way.
+func (rt *engine) draggableAlong(x, y float32, axis Orientation) *state {
+	for _, id := range rt.hitChain(x, y) {
+		s := rt.states[id]
+		if s == nil {
+			continue
+		}
+		if s.flags&flagDraggable != 0 && s.dragRec != nil && s.dragRec.axes&axis != 0 && s.flags&flagDisabled == 0 {
+			return s
+		}
+		if axis == Vertical && s.flags&flagScrollY != 0 && s.contentH > float64(s.h) || axis == Horizontal && s.flags&flagScrollX != 0 && s.contentW > float64(s.w) {
+			return nil
+		}
+	}
+	return nil
+}
+
+// pressDraggable has the finger press d, from where it went down.
+func (rt *engine) pressDraggable(d *state, x, y float32) {
+	rt.pressed, rt.pressButton, rt.pressClicks = d, 0, 1
+	d.pressed, d.pressMods, d.pressPending = true, rt.mods, true
+	d.pressX, d.pressY = d.local(x, y)
+	d.drag.reset(rt.now(), x, y)
+	rt.pointerX, rt.pointerY = x, y
+	rt.pointerIn = true
+	rt.requestFrame()
 }
 
 // cancelPress ends the press of a finger that pans, without a click.

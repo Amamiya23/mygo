@@ -366,3 +366,31 @@ func TestPullToRefresh(t *testing.T) {
 		t.Errorf("after refreshing: over %v", st.over[1])
 	}
 }
+
+// What takes clicks inside a sideways Draggable leaves what goes sideways to
+// it, and takes no click for it.
+func TestTouchDraggableAroundClickable(t *testing.T) {
+	var off Point
+	clicks := 0
+	tt := coreNewTester(func(c *context) {
+		coreBox(c).Fill().Draggable(&off, DraggableOptions{Axis: Horizontal}).Children(func() {
+			if coreBox(c).Fill().Clicked() {
+				clicks++
+			}
+		})
+	}, 200, 200)
+	tt.Frame()
+	tt.TouchDown(150, 50)
+	tt.Advance(time.Millisecond)
+	tt.TouchMove(120, 50)
+	tt.Frame()
+	tt.Advance(16 * time.Millisecond)
+	tt.TouchMove(80, 50)
+	tt.Frame()
+	tt.Advance(200 * time.Millisecond)
+	tt.TouchUp(80, 50)
+	tt.Frame()
+	if clicks != 0 || off.X >= -30 {
+		t.Errorf("%d clicks, dragged to %v", clicks, off.X)
+	}
+}

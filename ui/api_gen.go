@@ -461,6 +461,18 @@ func (_handle *Context) Router() *Router {
 	return _ctx.Router()
 }
 
+// SafeArea returns how far in from each edge of the window what the system
+// draws covers it, in DIPs: a phone's bars, its cutout and the keyboard. The
+// window's root keeps its content inside them; what draws in the Overlay, as
+// a sheet, or under them, reads them here.
+func (_handle *Context) SafeArea() (float32, float32, float32, float32) {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return 0, 0, 0, 0
+	}
+	return _ctx.SafeArea()
+}
+
 // SetTheme makes the frame use t, for the window's root and the widgets
 // created after the call. Inside the children of a Themed, which keep its
 // theme, t is for the root and the widgets after the Themed.
