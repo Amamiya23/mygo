@@ -24,9 +24,9 @@ type clusterEngine struct {
 	// emoji are the twins of fonts that draw emoji, unshaded: emoji
 	// keep their colors whatever the text's.
 	emoji map[*Font]*Font
-	// The glyphs' texts, by ID.
-	ids   map[string]uint32
-	texts []string
+	// glyphs are the texts of the glyphs of the Fonts made since the
+	// System last let go of them.
+	glyphs *glyphTexts
 	// words caches the pen positions of the clusters of words.
 	words map[wordKey][]float32
 	seg   segmenter.Segmenter
@@ -45,37 +45,47 @@ type clusterHost interface {
 	pens(f *Font, text []rune, bounds []int, noKern bool) []float32
 }
 
+// glyphTexts are the texts of glyphs, by ID: the engine's glyphs are
+// texts drawn whole. A Font keeps the table of its time, so that a layout
+// kept after the System let go of it still draws.
+type glyphTexts struct {
+	ids   map[string]uint32
+	texts []string
+}
+
+func newGlyphTexts() *glyphTexts {
+	return &glyphTexts{ids: map[string]uint32{"": 0}, texts: []string{""}}
+}
+
 type wordKey struct {
-	font   uintptr
+	font   *Font
 	word   string
 	noKern bool
 }
 
 func (e *clusterEngine) init(host clusterHost) {
 	e.host = host
-	e.ids = map[string]uint32{"": 0}
-	e.texts = []string{""}
+	e.glyphs = newGlyphTexts()
 	e.words = map[wordKey][]float32{}
 }
 
-// forgetGlyphs lets go of the glyphs and the measurements, which refer to
-// fonts by number.
+// forgetGlyphs lets go of the glyphs and the measurements, which Fonts
+// that layouts keep still hold.
 func (e *clusterEngine) forgetGlyphs() {
 	clear(e.emoji)
 	clear(e.words)
-	clear(e.ids)
-	e.ids[""] = 0
-	e.texts = e.texts[:1]
+	e.glyphs = newGlyphTexts()
 }
 
 // glyphID returns the ID of a glyph drawing text.
 func (e *clusterEngine) glyphID(text string) uint32 {
-	if id, ok := e.ids[text]; ok {
+	g := e.glyphs
+	if id, ok := g.ids[text]; ok {
 		return id
 	}
-	id := uint32(len(e.texts))
-	e.texts = append(e.texts, text)
-	e.ids[text] = id
+	id := uint32(len(g.texts))
+	g.texts = append(g.texts, text)
+	g.ids[text] = id
 	return id
 }
 
@@ -328,7 +338,7 @@ func (e *clusterEngine) measureWord(out []cluster, text []rune, bounds []int, f 
 // each drawn alone, at the positions the browser gives them in the whole.
 func (e *clusterEngine) measureClusters(out []cluster, text []rune, bounds []int, f *Font, spacing float32, noKern bool, level bidi.Level) []cluster {
 	start, end := bounds[0], bounds[len(bounds)-1]
-	key := wordKey{f.native, string(text[start:end]), noKern}
+	key := wordKey{f, string(text[start:end]), noKern}
 	pens, ok := e.words[key]
 	if !ok {
 		pens = e.host.pens(f, text[start:end], rebase(bounds, start), noKern)

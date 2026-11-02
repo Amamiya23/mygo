@@ -425,6 +425,9 @@ type WindowOptions struct {
 	// WebKit hands us for window.open().
 	Native uintptr
 
+	// ScrollToContainer scrolls the native container around an embedded web
+	// view instead of its page. Ordinary pages keep their own wheel input.
+	ScrollToContainer bool
 	// Surface creates the window with a Surface, which content MyGo draws
 	// itself fills, instead of a webview: Window.Surface returns it, the
 	// webview methods do nothing and the webview options are ignored.
@@ -823,9 +826,12 @@ type WindowHandler interface {
 
 	// SurfaceEvent delivers input on the window's Surface, and changes of
 	// it. For FileDragOver and FileDrop it reports whether the content
-	// takes the files where they are, and for KeyPressed whether it took
+	// takes the files where they are, for KeyPressed whether it took
 	// the key itself, which the system then leaves alone (Windows opens no
-	// menu for Alt and the key); it returns false for other events.
+	// menu for Alt and the key), for TextComposition whether it took the
+	// composition, which the input method gives up otherwise (macOS), and
+	// for SurfaceCommandEnabled whether the command would act; it returns
+	// false for other events.
 	SurfaceEvent(ev SurfaceEvent) bool
 }
 
@@ -986,6 +992,7 @@ type MessageBoxOptions struct {
 	Buttons         []string
 	DefaultID       int
 	CancelID        int
+	DestructiveIDs  []int
 	CheckboxLabel   string
 	CheckboxChecked bool
 }
@@ -1038,6 +1045,10 @@ type Shell interface {
 	// FileIcon returns the icon the file manager shows for a file, a
 	// folder or an application, as a PNG image of size by size pixels.
 	FileIcon(path string, size int) ([]byte, error)
+	// TypeIcon returns the icon the file manager shows for files with the
+	// extension ext (without its dot), as FileIcon does, though no such
+	// file exists.
+	TypeIcon(ext string, size int) ([]byte, error)
 	// OpenApplication starts the application at Application.Path, or
 	// brings it to the front.
 	OpenApplication(path string) error
@@ -1242,7 +1253,11 @@ type Notification struct {
 	Silent   bool
 	// Group gathers the notifications that share it (threadIdentifier on
 	// macOS).
-	Group  string
+	Group string
+	// Image is shown with the notification: PNG or JPEG, or nil. The core
+	// links the backend's code of images (LinkNotificationImages) before
+	// it gives one.
+	Image  []byte
 	Sender *NotificationSender
 }
 

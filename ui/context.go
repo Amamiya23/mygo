@@ -446,6 +446,37 @@ func (c *context) TitleBar() TitleBar { return c.titleBar }
 //	})
 func (c *context) Vibrancy() bool { return c.vibrancy }
 
+// WindowActive reports whether the window is drawn as active: the window
+// the user's input goes to, as native apps draw it, while it or one of its
+// flyouts has the keyboard (and always as Window.SetActiveAppearance keeps
+// it). The built-in widgets fade their accent to gray in a window that is
+// not, as AppKit's do (Theme.InactiveAccent), and macOS fades the
+// window's material. A frame that reads it is drawn again as it changes;
+// draw what shows which window has the user's input in a view of your own
+// with it:
+//
+//	icon := c.Theme().Accent
+//	if !c.WindowActive() {
+//		icon = c.Theme().TextMuted
+//	}
+func (c *context) WindowActive() bool { return c.rt.windowActive() }
+
+// emphasized reports whether the widgets show what is selected and the
+// primary action in t's accent: in a window drawn as active, and in every
+// window when t keeps it (Theme.InactiveAccent).
+func (c *context) emphasized(t *Theme) bool {
+	return t.InactiveAccent == t.Accent || c.rt.windowActive()
+}
+
+// accent returns the color the widgets fill what is checked or filled
+// with: t's accent in a window drawn as active, else what it fades to.
+func (c *context) accent(t *Theme) Color {
+	if c.emphasized(t) {
+		return t.Accent
+	}
+	return t.inactiveAccent()
+}
+
 // Now returns the time the frame started, for animations.
 func (c *context) Now() time.Time { return c.now }
 
@@ -475,6 +506,11 @@ func (c *context) DisableAnimations() { c.rt.instantFrame = c.rt.frame }
 // instant reports whether this frame shows changes at once
 // (DisableAnimations).
 func (rt *engine) instant() bool { return rt.instantFrame == rt.frame && rt.frame != 0 }
+
+// Instant reports whether this frame shows animated values at once
+// (DisableAnimations). Views read it to render a change settled in the same
+// frames where its animations are disabled.
+func (c *context) Instant() bool { return c.rt.instant() }
 
 // After asks for another frame after d, for something that changes with
 // time, such as a clock.
@@ -568,6 +604,10 @@ type state struct {
 
 	world scene.Affine
 	clips bool
+	// lifted tells that it was an element flying with a Match, which
+	// takes the pointer where it paints: over the rest of its layer, out
+	// of its ancestors' clips (matches.lifted).
+	lifted bool
 	// rtl tells that the element was laid out right to left: a scroll
 	// container's horizontal offset counts from the right, and its
 	// vertical scroll bar is on the left.
@@ -626,6 +666,18 @@ type state struct {
 	releaseVX, releaseVY float32
 	releaseWX, releaseWY float32
 	pressPending         bool // the press began since the last build pass
+	// releaseLater is what the release of the press gives the element,
+	// kept when it came with moves no pass had read for the pass that
+	// reads them to apply as it ends (forgetInput): where the pointer let
+	// go, which the element sees as the pointer meanwhile (pointer),
+	// whether it ended a drag, and the clicks since, the release's own
+	// first (click).
+	releaseLater struct {
+		due, released       bool
+		x, y                float32
+		clicks, rightClicks int
+		clickMods           Modifiers
+	}
 	// dragRec is what Draggable keeps of the element from frame to frame.
 	dragRec *dragRec
 
@@ -640,8 +692,8 @@ type state struct {
 	barWidth float32
 	// barsShown reports whether the last frame painted the element's
 	// scroll bars: they show only while it is hovered or a bar is
-	// dragged.
-	barsShown bool
+	// dragged, unless it keeps them (KeepScrollbars).
+	barsShown, hideScrollbars bool
 	// track is the ScrollState of the last frame's element, which events
 	// that scroll it update (scrollTo).
 	track *ScrollState

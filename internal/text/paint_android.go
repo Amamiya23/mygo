@@ -20,8 +20,15 @@ func newEngine() engine {
 type paintEngine struct {
 	clusterEngine
 	fonts map[paintSpec]*Font
-	specs []paintSpec // the spec of each Font, by native
-	names []string    // the families the app registered fonts under
+	names []string // the families the app registered fonts under
+}
+
+// paintFont is what the engine keeps of a Font (Font.data): the font as the
+// host takes it, and the texts of its glyphs, which a layout kept after the
+// System let go of the Font still draws.
+type paintFont struct {
+	spec   paintSpec
+	glyphs *glyphTexts
 }
 
 // paintSpec is a font as the host takes it.
@@ -37,7 +44,7 @@ func (e *paintEngine) font(style Style) *Font {
 	if f, ok := e.fonts[key]; ok {
 		return f
 	}
-	f := &Font{Size: key.size, native: uintptr(len(e.specs))}
+	f := &Font{Size: key.size, data: &paintFont{key, e.glyphs}}
 	m, ok := mobile.TextMetrics(key.family, float64(key.size), key.weight, key.italic)
 	if ok && m.Ascent > 0 {
 		f.Ascent, f.Descent = float32(m.Ascent), float32(m.Descent)
@@ -48,12 +55,11 @@ func (e *paintEngine) font(style Style) *Font {
 		f.underlineTop, f.underlineThick = -key.size/10, max(key.size/14, 1)
 		f.strikeTop, f.strikeThick = key.size*0.3, f.underlineThick
 	}
-	e.specs = append(e.specs, key)
 	e.fonts[key] = f
 	return f
 }
 
-func (e *paintEngine) spec(f *Font) paintSpec { return e.specs[f.native] }
+func (e *paintEngine) spec(f *Font) paintSpec { return f.data.(*paintFont).spec }
 
 func (e *paintEngine) measure(f *Font, text string, noKern bool) float32 {
 	s := e.spec(f)
@@ -98,11 +104,13 @@ func (e *paintEngine) pens(f *Font, text []rune, bounds []int, noKern bool) []fl
 }
 
 func (e *paintEngine) glyph(f *Font, id uint32, scale, dx float32, _ Shade, _ bool) bitmap {
-	if int(id) >= len(e.texts) || id == 0 {
+	// The texts of the glyphs of f's time: the engine's may be newer.
+	pf := f.data.(*paintFont)
+	if int(id) >= len(pf.glyphs.texts) || id == 0 {
 		return bitmap{}
 	}
-	s := e.spec(f)
-	r := mobile.DrawText(s.family, float64(s.size), s.weight, s.italic, e.texts[id], float64(scale), float64(dx))
+	s := pf.spec
+	r := mobile.DrawText(s.family, float64(s.size), s.weight, s.italic, pf.glyphs.texts[id], float64(scale), float64(dx))
 	if r.Width <= 0 || r.Height <= 0 {
 		return bitmap{}
 	}
@@ -118,7 +126,7 @@ func (e *paintEngine) textParams() (scene.TextParams, bool) { return scene.TextP
 const maxPaintTexts = 1 << 16
 
 func (e *paintEngine) fontCount() int {
-	if len(e.texts) > maxPaintTexts {
+	if len(e.glyphs.texts) > maxPaintTexts {
 		return maxFonts + 1
 	}
 	return len(e.fonts)
@@ -126,9 +134,11 @@ func (e *paintEngine) fontCount() int {
 
 func (e *paintEngine) forgetFonts() {
 	clear(e.fonts)
-	e.specs = e.specs[:0]
 	e.forgetGlyphs()
 }
+
+// releaseFonts has nothing to release: the host keeps its fonts.
+func (e *paintEngine) releaseFonts() {}
 
 func (e *paintEngine) appFamilies() []FontFamily {
 	out := make([]FontFamily, len(e.names))

@@ -38,7 +38,6 @@ type canvasEngine struct {
 	// its fillStyle.
 	current, kerning, fill string
 	fonts                  map[string]*Font
-	css                    []fontCSS // the CSS font of each Font, by native
 	// names are the families the app registered fonts under.
 	names []string
 	// image is the canvas's pixels read back, reused.
@@ -49,6 +48,14 @@ type canvasEngine struct {
 // fontCSS is a CSS font without its size: the style and weight before it,
 // the families after.
 type fontCSS struct{ pre, family string }
+
+// canvasFont is what the engine keeps of a Font (Font.data): its CSS font,
+// and the texts of its glyphs, which a layout kept after the System let go
+// of the Font still draws.
+type canvasFont struct {
+	css    fontCSS
+	glyphs *glyphTexts
+}
 
 func newCanvas() *canvasEngine {
 	e := &canvasEngine{fonts: map[string]*Font{}}
@@ -128,7 +135,7 @@ func (e *canvasEngine) font(style Style) *Font {
 	// Core Text's font smoothing emboldens lighter text more, and Skia
 	// corrects coverage by the text's luminance. Thick text is drawn in
 	// white, the boldest.
-	f := &Font{Size: size, native: uintptr(len(e.css)), shaded: true, thickens: true}
+	f := &Font{Size: size, data: &canvasFont{fc, e.glyphs}, shaded: true, thickens: true}
 	if a := m.Get("fontBoundingBoxAscent"); a.Type() == js.TypeNumber {
 		f.Ascent, f.Descent = float32(a.Float()), float32(m.Get("fontBoundingBoxDescent").Float())
 	} else {
@@ -145,7 +152,6 @@ func (e *canvasEngine) font(style Style) *Font {
 		f.strikeTop = size * 0.3
 	}
 	f.strikeThick = thick
-	e.css = append(e.css, fc)
 	e.fonts[css] = f
 	return f
 }
@@ -165,7 +171,9 @@ func (e *canvasEngine) measure(f *Font, text string, noKern bool) float32 {
 }
 
 // sized returns the CSS font of f at size px.
-func (e *canvasEngine) sized(f *Font, size float32) string { return e.css[f.native].at(size) }
+func (e *canvasEngine) sized(f *Font, size float32) string {
+	return f.data.(*canvasFont).css.at(size)
+}
 
 // shadeGray is the gray glyphs of text of each shade are drawn in: of
 // relative luminance 0, 1/4, 1/2 and 3/4 (ShadeOf), and white for Thick.
@@ -175,10 +183,12 @@ var shadeGray = [...]uint8{0, 137, 188, 225, 255, 0}
 // glyph draws a glyph's text in the gray of its shade and reads its
 // coverage back: gray, or color for color fonts (emoji).
 func (e *canvasEngine) glyph(f *Font, id uint32, scale, dx float32, shade Shade, _ bool) bitmap {
-	if int(id) >= len(e.texts) || id == 0 {
+	// The texts of the glyphs of f's time: the engine's may be newer.
+	texts := f.data.(*canvasFont).glyphs.texts
+	if int(id) >= len(texts) || id == 0 {
 		return bitmap{}
 	}
-	text := e.texts[id]
+	text := texts[id]
 	if strings.TrimSpace(text) == "" {
 		return bitmap{}
 	}
@@ -286,19 +296,21 @@ func (e *canvasEngine) glyph(f *Font, id uint32, scale, dx float32, shade Shade,
 const maxTexts = 1 << 16
 
 func (e *canvasEngine) fontCount() int {
-	if len(e.texts) > maxTexts {
+	if len(e.glyphs.texts) > maxTexts {
 		return maxFonts + 1
 	}
 	return len(e.fonts)
 }
 
-// forgetFonts lets go of the fonts, and of the glyphs and measurements,
-// which refer to them by number.
+// forgetFonts lets go of the fonts, and of the glyphs and measurements.
+// A Font kept by a layout keeps its CSS font and its glyphs' texts.
 func (e *canvasEngine) forgetFonts() {
 	clear(e.fonts)
-	e.css = e.css[:0]
 	e.forgetGlyphs()
 }
+
+// releaseFonts has nothing to release: the browser keeps its fonts.
+func (e *canvasEngine) releaseFonts() {}
 
 // pens leaves the browser's words to measure, cluster by cluster.
 func (e *canvasEngine) pens(*Font, []rune, []int, bool) []float32 { return nil }

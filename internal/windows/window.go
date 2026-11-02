@@ -127,6 +127,11 @@ type window struct {
 	htmlNext     bool              // LoadHTML started the next navigation
 	calls        map[int]func(string, error)
 	nextCall     int
+
+	// flyoutLeft tells that the activation left the window's focusable
+	// flyout for another app's window, which draws the window inactive
+	// though the flyout still shows (keepsActive).
+	flyoutLeft bool
 }
 
 func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler) (platform.Window, error) {
@@ -409,6 +414,18 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 	if m == wmMouseActivate && w.ownsFocusableFlyout() {
 		return maActivateAndEat, true
 	}
+	if m == wmNCActivate && wp == 0 && w.keepsActive() {
+		// Its flyout takes the activation: the frame and the material
+		// stay active, as the window's own menus and popovers keep them.
+		if r, ok := w.menuBarMessage(m, 1, lp); ok {
+			return r, true
+		}
+		r, _, _ := procDefWindowProcW.Call(w.hwnd, uintptr(m), 1, lp)
+		return r, true
+	}
+	if m == wmInitMenuPopup {
+		w.enableEditItems(wp)
+	}
 	if r, ok := w.b.menuItemMessage(w.hwnd, m, wp, lp); ok {
 		return r, true
 	}
@@ -455,8 +472,11 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		w.h.Moved()
 		return 0, true
 	case wmActivate:
+		if loword(wp) != waInactive {
+			w.flyoutLeft = false
+		}
 		if w.caption != nil {
-			w.caption.activate(loword(wp) != waInactive)
+			w.caption.activate(loword(wp) != waInactive || w.keepsActive())
 		}
 		if loword(wp) == waInactive {
 			w.h.Blurred()
@@ -1313,19 +1333,24 @@ func (w *window) extendGlass(always bool) {
 
 // glassFromBottom reports a window whose frame extends from the bottom
 // over its client area (glassMargins) rather than all over: a frameless
-// window, and a maximized one with a hidden title bar. Flyouts are popups
-// without a caption, whose frame DWM draws no buttons in.
+// window, and a maximized one. Flyouts are popups without a caption, whose
+// frame DWM draws no buttons in.
 //
 // A frameless window keeps WS_CAPTION, WS_SYSMENU and the boxes of its
 // styles, for snapping, Win+arrow keys, the taskbar's minimize and the
 // window menu of Alt+Space; frameCalcSize leaves it no title bar. Extended
 // all over, the frame covers the window's top, and DWM draws its caption
 // buttons there, over the page.
+//
+// A maximized window's title bar is shorter than a restored one's, but in a
+// frame extended all over DWM draws the system's caption buttons as tall as
+// a restored window's: past the title bar, where the color of the one under
+// the pointer shows through a translucent page.
 func (w *window) glassFromBottom() bool {
 	if w.frameless {
 		return w.opts.Flyout == nil
 	}
-	return w.hiddenTitleBar && !w.fullScreen && w.IsMaximized()
+	return !w.fullScreen && w.IsMaximized()
 }
 
 // glassMargins returns the frame's extension that shows the material over
@@ -1336,8 +1361,8 @@ func (w *window) glassFromBottom() bool {
 // above the title bar's; a frameless window has no buttons of its own at
 // all. fromBottom extends the frame from the bottom over the whole client
 // area instead: the material still shows everywhere, and the frame's top
-// is only what lies above the client area, a strip off screen or nothing,
-// too short for buttons.
+// is only what lies above the client area: a strip off screen or nothing,
+// too short for buttons, or the system's title bar, which holds them.
 func glassMargins(fromBottom bool, height int32) margins {
 	if fromBottom {
 		return margins{Bottom: max(height, 1)}
