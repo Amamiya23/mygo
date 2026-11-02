@@ -83,7 +83,7 @@ func (c *Config) natives(goos, goarch string) ([]source, error) {
 			return nil, fmt.Errorf("%s: %w", filepath.Join(dir, pluginFile), err)
 		}
 		for _, l := range n.Libraries {
-			if seen[l.Name] {
+			if seen[l.Name] || ((goos == "ios" || goos == "android") && builtForPhones(data, l.Name)) {
 				continue
 			}
 			seen[l.Name] = true

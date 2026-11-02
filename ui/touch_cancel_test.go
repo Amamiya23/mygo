@@ -154,3 +154,34 @@ func TestTapCatchingBounceLetsItGo(t *testing.T) {
 		t.Errorf("after the tap, it stays at %v", top)
 	}
 }
+
+// Something else in the place of what pulled to refresh doesn't refresh it, as
+// two tabs at the same place of the tree.
+func TestPullToRefreshGoesWithIt(t *testing.T) {
+	defer func(k overscroll) { overscrollKind = k }(overscrollKind)
+	overscrollKind = overscrollBounce
+	var r RefreshState
+	pulls := true
+	tt := coreNewTester(func(c *context) {
+		e := coreScroll(c).Fill()
+		if pulls {
+			e.PullToRefresh(&r)
+		}
+		e.Children(func() { coreBox(c).Height(50).Shrink(0) })
+	}, 200, 200)
+	tt.Frame()
+	pulls = false
+	tt.Frame()
+	tt.TouchDown(100, 20)
+	tt.Advance(time.Millisecond)
+	for y := float32(40); y <= 190; y += 15 {
+		tt.TouchMove(100, y)
+		tt.Advance(16 * time.Millisecond)
+	}
+	tt.Advance(200 * time.Millisecond)
+	tt.TouchUp(100, 190)
+	tt.Frame()
+	if r.Refreshing {
+		t.Error("a pull on what took its place refreshed it")
+	}
+}

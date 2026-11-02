@@ -146,6 +146,10 @@ func (t *iosToolchain) buildApp(ctx context.Context, c, dc *Config, tk *task, op
 		return "", fmt.Errorf("swiftc failed: %v\n%s", err, bytes.TrimSpace(out))
 	}
 
+	if err := plugins.embedFrameworks(ctx, t, tk, dc, bundle); err != nil {
+		return "", err
+	}
+
 	tk.set("bundling")
 	res, err := dc.appResources("ios", "arm64")
 	if err != nil {
@@ -474,7 +478,9 @@ func buildIOS(c *Config, opts buildOptions, simulator bool) ([]string, error) {
 	if err == nil {
 		tk.set("signing")
 		if simulator {
-			err = runQuiet("codesign", "--force", "--sign", "-", bundle)
+			if err = signFrameworks(bundle, "-"); err == nil {
+				err = runQuiet("codesign", "--force", "--sign", "-", bundle)
+			}
 		} else {
 			err = prof.sign(opts.work, bundle, c)
 		}
@@ -727,6 +733,9 @@ func (p *profile) sign(work, bundle string, c *Config) error {
 	}
 	// A wildcard profile's app ID becomes the app's.
 	if err := runQuiet("plutil", "-replace", "application-identifier", "-string", p.team+"."+c.Identifier, ent); err != nil {
+		return err
+	}
+	if err := signFrameworks(bundle, p.identity); err != nil {
 		return err
 	}
 	if err := runQuiet("codesign", "--force", "--sign", p.identity, "--entitlements", ent, "--generate-entitlement-der", bundle); err != nil {

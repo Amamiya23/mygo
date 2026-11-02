@@ -985,6 +985,7 @@ func (e *node) LongPressed() bool {
 		return false
 	}
 	e.st.longPress = true
+	e.st.fingersFrame = e.c.rt.frame
 	e.flags |= flagClickable
 	if e.disabled() || !e.st.longPressed {
 		return false

@@ -1266,6 +1266,10 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 		s.parent = 0
 	}
 	s.flags = e.flags
+	if s.fingersFrame != rt.frame && (s.refresh != nil || s.longPress) {
+		// What asked for them went, and this element has its place.
+		s.refresh, s.longPress = nil, false
+	}
 	s.rtl = e.rtl()
 	s.anchor = 0
 	if e.popover != nil {

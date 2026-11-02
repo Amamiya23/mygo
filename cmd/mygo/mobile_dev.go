@@ -138,6 +138,9 @@ func (s *devSession) buildAndLaunchMobile(ctx context.Context, t *task, running 
 	final := filepath.Join(dir, filepath.Base(app))
 	if s.device.platform == "ios" {
 		t.set("signing")
+		if err := signFrameworks(app, "-"); err != nil {
+			return nil, sum, err
+		}
 		if err := runQuiet("codesign", "--force", "--sign", "-", app); err != nil {
 			return nil, sum, err
 		}

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"path/filepath"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -22,6 +23,7 @@ import (
 	"github.com/egoist/mygo/plugins/permissionflow"
 	"github.com/egoist/mygo/plugins/preferences"
 	"github.com/egoist/mygo/plugins/sensors"
+	"github.com/egoist/mygo/plugins/sqlite"
 	"github.com/egoist/mygo/plugins/videoplayer"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/mobile"
@@ -468,6 +470,29 @@ func (a *app) system(c *ui.Context) {
 					}
 					return st.String()
 				})
+				row("Keep a note in SQLite", func(ctx context.Context) string {
+					dir, err := mygo.App.Path(mygo.PathUserData)
+					if err != nil {
+						return err.Error()
+					}
+					db, err := sqlite.Open(ctx, filepath.Join(dir, "notes.db"), sqlite.OpenOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					defer db.Close()
+					// Full-text search, on a table that outlives the app.
+					if _, err := db.Execute(ctx, "CREATE VIRTUAL TABLE IF NOT EXISTS notes USING fts5(body)"); err != nil {
+						return err.Error()
+					}
+					if _, err := db.Execute(ctx, "INSERT INTO notes VALUES (?)", "made with mygo"); err != nil {
+						return err.Error()
+					}
+					r, err := db.Query(ctx, "SELECT count(*), sqlite_version() FROM notes WHERE notes MATCH 'mygo'")
+					if err != nil {
+						return err.Error()
+					}
+					return fmt.Sprintf("%v notes found, SQLite %v", r.Values[0][0], r.Values[0][1])
+				})
 				row("Count launches", func(ctx context.Context) string {
 					n := 0
 					preferences.Get("launches", &n)
@@ -513,7 +538,8 @@ var tabs = []mobile.BarButton{
 func (a *app) view(c *ui.Context) {
 	ui.Column(c).Fill().Children(func() {
 		mobile.TopBar(c, mobile.TopBarOptions{Title: tabs[a.tab].Label})
-		ui.Box(c).Grow(1).Basis(0).FillWidth().Children(func() {
+		// Keyed by its tab: each keeps its own scroll.
+		ui.Box(c.Key(a.tab)).Grow(1).Basis(0).FillWidth().Children(func() {
 			switch a.tab {
 			case 0:
 				a.widgets(c)

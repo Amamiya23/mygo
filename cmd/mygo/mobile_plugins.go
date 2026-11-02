@@ -32,6 +32,8 @@ import (
 //		}
 //	}}
 //
+// (and "native", C code the CLI compiles for phones: pluginNative.)
+//
 // The Swift compiles into the host's module, the Kotlin into its package
 // dev.mygo, and they implement MyGoPlugin: Go reaches them by id, with
 // mygo.Native. An app that does not import the package has none of it.
@@ -39,6 +41,8 @@ type mobilePlugin struct {
 	ID      string         `json:"id"`
 	IOS     *pluginIOS     `json:"ios"`
 	Android *pluginAndroid `json:"android"`
+	// Native is its C code.
+	Native *pluginNative `json:"native"`
 
 	dir string
 }

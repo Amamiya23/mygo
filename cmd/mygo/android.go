@@ -108,11 +108,7 @@ func (t *androidToolchain) buildGo(ctx context.Context, c, dc *Config, tk *task,
 			a = x
 		}
 	}
-	clang := filepath.Join(t.ndkBin, a.triple+strconv.Itoa(max(c.Android.MinSdk, 21))+"-clang")
-	if runtime.GOOS == "windows" {
-		clang += ".cmd"
-	}
-	env := []string{"GOOS=android", "GOARCH=" + a.goarch, "CGO_ENABLED=1", "CC=" + clang,
+	env := []string{"GOOS=android", "GOARCH=" + a.goarch, "CGO_ENABLED=1", "CC=" + t.clang(c, abi),
 		// 16 KB pages, which new devices have and Google Play asks for.
 		"CGO_LDFLAGS=-Wl,-z,max-page-size=16384"}
 	if a.goarch == "arm" {
@@ -141,7 +137,26 @@ func (t *androidToolchain) buildGo(ctx context.Context, c, dc *Config, tk *task,
 		return err
 	}
 	os.Remove(strings.TrimSuffix(out, ".so") + ".h")
-	return nil
+	plugins, err := c.mobilePlugins("android")
+	if err != nil {
+		return err
+	}
+	return plugins.copyAndroidNatives(ctx, t, tk, c, abi, jniLibs)
+}
+
+// clang is the NDK's compiler for abi.
+func (t *androidToolchain) clang(c *Config, abi string) string {
+	triple := ""
+	for _, x := range androidABIs {
+		if x.abi == abi {
+			triple = x.triple
+		}
+	}
+	clang := filepath.Join(t.ndkBin, triple+strconv.Itoa(max(c.Android.MinSdk, 21))+"-clang")
+	if runtime.GOOS == "windows" {
+		clang += ".cmd"
+	}
+	return clang
 }
 
 // project writes the host's Gradle project into dir, where Gradle keeps
@@ -576,6 +591,23 @@ func androidHostKey(c, dc *Config, dir string) (string, error) {
 		}
 	}
 	for _, p := range plugins {
+		if p.Native != nil {
+			// What it compiles is in the APK, not in what only Go changes.
+			spec, err := json.Marshal(p.Native)
+			if err != nil {
+				return "", err
+			}
+			h.Write(spec)
+			files, err := p.sourcesOf(p.Native.Sources)
+			if err != nil {
+				return "", err
+			}
+			for _, f := range files {
+				if err := hashIfExists(h, f); err != nil {
+					return "", err
+				}
+			}
+		}
 		if p.Android == nil {
 			continue
 		}

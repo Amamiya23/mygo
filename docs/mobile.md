@@ -234,6 +234,7 @@ if it imports it, with its usage descriptions and permissions added to the app:
 | `purchases` | In-app purchases and subscriptions: StoreKit 2 and Google Play Billing |
 | `permissionflow` | Whether the app may use the camera, the microphone, photos, contacts…, asking, and the system's settings |
 | `preferences` | Small values kept between runs, on every platform |
+| `sqlite` | SQLite with full-text search, 64-bit, compiled into the app |
 
 ## Writing a plugin
 
@@ -302,6 +303,28 @@ class TorchPlugin : MyGoPlugin {
 over and `applicationEvent` for what reaches the app's delegate; on Android the
 `activity`, `startForResult` and `requestPermissions`. An error's code comes to
 Go as a `*mygo.NativeError`.
+
+### C code
+
+A plugin's C compiles with the app, with the compiler phones need anyway, once
+per target (the user's cache keeps it). The sqlite plugin brings SQLite this way:
+
+```json
+{"mobile": {"id": "sqlite", "native": {
+  "name": "mygo-sqlite3",
+  "archive": {"url": "https://www.sqlite.org/...zip", "sha256": "...", "files": ["sqlite3.c", "sqlite3.h"]},
+  "sources": ["native/sqlite.c"],
+  "cflags": ["-DSQLITE_THREADSAFE=1"],
+  "ldflags": ["-lm"],
+  "abis": ["arm64-v8a", "x86_64"]
+}}}
+```
+
+iOS gets a framework inside the bundle, signed with the app, and Android a
+library of the APK. `mygo.NativeLibrary(name)` is what to give dlopen, through
+[purego](https://github.com/ebitengine/purego) as on desktops: a plugin needs
+no cgo. A package may name libraries for desktops too, under `libraries`; on
+phones a library it compiles takes their place.
 
 ### Native views
 

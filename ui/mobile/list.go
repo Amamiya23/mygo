@@ -20,7 +20,11 @@ func ListRow(c *ui.Context, o RowOptions) ui.Element {
 	if Current() == Material {
 		minH = 56
 	}
-	row := ui.Row(c).FillWidth().MinHeight(minH).AlignItems(ui.Center).Padding(10, 16).Gap(12).Role(ui.RoleButton).Label(o.Title)
+	label := o.Title
+	if o.Subtitle != "" {
+		label += ", " + o.Subtitle // screen readers read the row as one
+	}
+	row := ui.Row(c).FillWidth().MinHeight(minH).AlignItems(ui.Center).Padding(10, 16).Gap(12).Role(ui.RoleButton).Label(label)
 	press(row, t)
 	row.Children(func() {
 		if o.Leading != nil {
